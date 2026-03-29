@@ -13,14 +13,17 @@ Requires: xdotool, wmctrl, scrot (sudo apt install xdotool wmctrl scrot)
 Falls back gracefully if tools are not installed.
 """
 from __future__ import annotations
-import datetime, os, pathlib, subprocess, time
+import datetime, os, pathlib, platform, subprocess, time
 
 _SCREENSHOT_DIR = pathlib.Path.home() / "Pictures" / "jarvis"
 
 
 def _display_env() -> dict:
     """Build env dict with DISPLAY set — evaluated at call time so the service's
-    runtime value (e.g. set after import) is always picked up."""
+    runtime value (e.g. set after import) is always picked up.
+    On Windows there is no DISPLAY variable; returns plain env copy."""
+    if platform.system() == "Windows":
+        return dict(os.environ)
     return {**os.environ, "DISPLAY": os.environ.get("DISPLAY", ":0")}
 
 
@@ -51,16 +54,17 @@ def take_screenshot() -> dict:
         ts   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = _SCREENSHOT_DIR / f"jarvis_{ts}.png"
 
-        # 1. scrot
-        r = subprocess.run(
-            ["scrot", str(path)],
-            capture_output=True, text=True, timeout=10,
-            env=_display_env(),
-        )
-        if r.returncode == 0 and path.exists():
-            return {"success": True, "result": f"Screenshot saved to {path}", "path": str(path)}
+        # 1. scrot (Linux only)
+        if platform.system() == "Linux":
+            r = subprocess.run(
+                ["scrot", str(path)],
+                capture_output=True, text=True, timeout=10,
+                env=_display_env(),
+            )
+            if r.returncode == 0 and path.exists():
+                return {"success": True, "result": f"Screenshot saved to {path}", "path": str(path)}
 
-        # 2. pyautogui fallback (no extra tool required)
+        # 2. pyautogui (cross-platform)
         import pyautogui
         img = pyautogui.screenshot()
         img.save(str(path))
@@ -74,6 +78,14 @@ def take_screenshot() -> dict:
 
 def type_text(text: str) -> dict:
     """Type text at the current cursor position."""
+    if platform.system() != "Linux":
+        try:
+            import pyautogui
+            pyautogui.typewrite(text, interval=0.05)
+            preview = text[:50] + ("..." if len(text) > 50 else "")
+            return {"success": True, "result": f"Typed: {preview}"}
+        except Exception as e:
+            return {"success": False, "result": "", "error": str(e)}
     ok, msg = _xdotool("type", "--clearmodifiers", "--delay", "50", "--", text)
     if ok:
         preview = text[:50] + ("..." if len(text) > 50 else "")
@@ -105,6 +117,25 @@ _KEY_ALIASES: dict[str, str] = {
     **{f"f{i}": f"F{i}" for i in range(1, 13)},
 }
 
+# xdotool key name → pyautogui key name (for Windows / macOS)
+_PYAUTOGUI_KEY_MAP: dict[str, str] = {
+    "Return":    "enter",
+    "Escape":    "escape",
+    "BackSpace": "backspace",
+    "Delete":    "delete",
+    "Tab":       "tab",
+    "space":     "space",
+    "Up":        "up",
+    "Down":      "down",
+    "Left":      "left",
+    "Right":     "right",
+    "Home":      "home",
+    "End":       "end",
+    "Prior":     "pageup",
+    "Next":      "pagedown",
+    **{f"F{i}": f"f{i}" for i in range(1, 13)},
+}
+
 
 def press_shortcut(shortcut: str) -> dict:
     """
@@ -121,6 +152,17 @@ def press_shortcut(shortcut: str) -> dict:
     parts = [_KEY_ALIASES.get(p, p) for p in parts]
     xkey  = "+".join(parts)
 
+    if platform.system() != "Linux":
+        try:
+            import pyautogui
+            pg_parts = [_PYAUTOGUI_KEY_MAP.get(p, p.lower()) for p in parts]
+            if len(pg_parts) == 1:
+                pyautogui.press(pg_parts[0])
+            else:
+                pyautogui.hotkey(*pg_parts)
+            return {"success": True, "result": f"Pressed: {shortcut}"}
+        except Exception as e:
+            return {"success": False, "result": "", "error": str(e)}
     ok, msg = _xdotool("key", "--clearmodifiers", xkey)
     if ok:
         return {"success": True, "result": f"Pressed: {shortcut}"}
@@ -183,18 +225,46 @@ def youtube_control(action: str) -> dict:
                 "error": f"Unknown YouTube action: '{action}'. "
                          f"Try: pause, play, mute, fullscreen, next, previous, forward, rewind"}
 
-    # Find a window whose title contains "YouTube"
-    ok, wids = _xdotool("search", "--name", "YouTube")
-    if not ok or not wids:
-        return {"success": False, "result": "",
-                "error": "No YouTube window found. Please open YouTube in your browser first."}
-
-    window_id = wids.split()[0]
-
-    # Activate the window, then send the key
-    _xdotool("windowactivate", "--sync", window_id)
-    time.sleep(0.15)
-    ok2, msg2 = _xdotool("key", "--window", window_id, "--clearmodifiers", key)
+    if platform.system() == "Linux":
+        # Find and activate a window whose title contains "YouTube" via xdotool
+        ok, wids = _xdotool("search", "--name", "YouTube")
+        if not ok or not wids:
+            return {"success": False, "result": "",
+                    "error": "No YouTube window found. Please open YouTube in your browser first."}
+        window_id = wids.split()[0]
+        _xdotool("windowactivate", "--sync", window_id)
+        time.sleep(0.15)
+        ok2, msg2 = _xdotool("key", "--window", window_id, "--clearmodifiers", key)
+    else:
+        # Windows / macOS: use pywin32 for focus, pyautogui for key send
+        focused = False
+        try:
+            import win32gui
+            hwnds: list = []
+            def _cb(hwnd, _):
+                if "YouTube" in (win32gui.GetWindowText(hwnd) or ""):
+                    hwnds.append(hwnd)
+            win32gui.EnumWindows(_cb, None)
+            if hwnds:
+                win32gui.SetForegroundWindow(hwnds[0])
+                time.sleep(0.15)
+                focused = True
+        except ImportError:
+            pass
+        if not focused:
+            return {"success": False, "result": "",
+                    "error": "No YouTube window found. Install pywin32 for Windows window-focus support."}
+        try:
+            import pyautogui
+            pg_key = _PYAUTOGUI_KEY_MAP.get(key, key.lower())
+            if "+" in pg_key:
+                pg_parts = [_PYAUTOGUI_KEY_MAP.get(p, p.lower()) for p in pg_key.split("+")]
+                pyautogui.hotkey(*pg_parts)
+            else:
+                pyautogui.press(pg_key)
+            ok2, msg2 = True, ""
+        except Exception as e:
+            ok2, msg2 = False, str(e)
 
     if ok2:
         label = _YOUTUBE_ACTION_LABELS.get(key, action)

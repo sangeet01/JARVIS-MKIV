@@ -40,7 +40,8 @@ async def vision_status():
 @vision_router.get("/vision/image")
 async def get_vision_image():
     """Serve /tmp/jarvis_screen.png for the HUD image preview."""
-    return FileResponse("/tmp/jarvis_screen.png", media_type="image/png")
+    import os
+    return FileResponse(os.path.join(tempfile.gettempdir(), "jarvis_screen.png"), media_type="image/png")
 
 
 # ── Screenshot & analyse ──────────────────────────────────────────────────────

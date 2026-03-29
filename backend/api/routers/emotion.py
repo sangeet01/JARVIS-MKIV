@@ -42,7 +42,8 @@ async def emotion_calibrate():
     Record 10 seconds from the microphone and save as the voice baseline.
     The recording happens in a worker thread so FastAPI stays responsive.
     """
-    wav_path = "/tmp/jarvis_calibration.wav"
+    import tempfile as _tempfile
+    wav_path = _tempfile.gettempdir().replace("\\", "/") + "/jarvis_calibration.wav"
 
     def _record_and_calibrate() -> dict:
         import numpy as np

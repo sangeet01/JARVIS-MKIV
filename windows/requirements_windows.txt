@@ -1,0 +1,38 @@
+# JARVIS-MKIII — Windows-specific requirements
+# Install with: pip install -r windows/requirements_windows.txt
+
+# Windows audio control (replaces pactl)
+pycaw
+comtypes
+
+# Windows GUI / window management (replaces xdotool + wmctrl)
+pywin32
+
+# Windows brightness control (replaces brightnessctl)
+screen-brightness-control
+
+# ── Cross-platform deps (same as requirements.txt minus python-xlib) ──────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+websockets>=13.0
+pydantic>=2.9.0
+cryptography>=43.0.0
+httpx>=0.27.0
+groq>=0.9.0
+ollama>=0.3.0
+faster-whisper>=1.1.0
+kokoro>=0.9.4
+sounddevice>=0.4.6
+soundfile>=0.12.1
+webrtcvad-wheels>=2.0.10
+numpy>=1.26.0
+aiofiles>=24.0.0
+psutil>=6.0.0
+playwright>=1.40.0
+selenium>=4.18.0
+beautifulsoup4>=4.12.0
+pyautogui>=0.9.54
+Pillow>=10.0.0
+pyperclip>=1.8.2
+anthropic>=0.40.0
+# python-xlib is intentionally omitted — Linux/X11 only

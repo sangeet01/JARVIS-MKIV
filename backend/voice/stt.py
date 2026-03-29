@@ -96,8 +96,9 @@ class STTEngine:
         # EMOTION — save raw PCM to temp file and analyse in background (non-blocking)
         try:
             import tempfile as _tf
+            import os as _os
             from scipy.io import wavfile as _wf
-            _wav_path = "/tmp/jarvis_voice_sample.wav"
+            _wav_path = _os.path.join(_tf.gettempdir(), "jarvis_voice_sample.wav")
             _pcm_int16 = np.frombuffer(pcm, dtype=np.int16)
             _wf.write(_wav_path, SAMPLE_RATE, _pcm_int16)
 

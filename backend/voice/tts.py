@@ -1,5 +1,5 @@
 from __future__ import annotations
-import threading, queue, subprocess, re
+import threading, queue, subprocess, re, os, platform, tempfile
 import numpy as np
 import sounddevice as sd
 
@@ -14,6 +14,7 @@ PLAYBACK_RATE = 48000
 VOICE         = "bm_daniel"
 SPEED         = 1.2
 OUTPUT_DEVICE = None
+_TEMP_DIR     = tempfile.gettempdir()
 
 
 def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
@@ -39,6 +40,28 @@ def _split_sentences(text):
     if buf:
         result.append(buf)
     return result if result else [text]
+
+
+def _set_mic_mute(mute: bool) -> None:
+    """Mute or unmute the default microphone — cross-platform."""
+    if platform.system() == "Linux":
+        action = "1" if mute else "0"
+        subprocess.run(
+            ["pactl", "set-source-mute", "@DEFAULT_SOURCE@", action],
+            capture_output=True,
+        )
+    elif platform.system() == "Windows":
+        try:
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            from comtypes import CLSCTX_ALL
+            mic = AudioUtilities.GetMicrophone()
+            if mic:
+                interface = mic.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = interface.QueryInterface(IAudioEndpointVolume)
+                volume.SetMute(1 if mute else 0, None)
+        except Exception as e:
+            print(f"[TTS] Windows mic mute failed: {e}")
+    # macOS and others: skip silently
 
 
 class TTSEngine:
@@ -103,10 +126,11 @@ class TTSEngine:
             import time
             import pygame
             from gtts import gTTS
+            _ar_mp3 = os.path.join(_TEMP_DIR, "jarvis_ar.mp3")
             tts = gTTS(text=text, lang="ar", tld="com")
-            tts.save("/tmp/jarvis_ar.mp3")
+            tts.save(_ar_mp3)
             pygame.mixer.init()
-            pygame.mixer.music.load("/tmp/jarvis_ar.mp3")
+            pygame.mixer.music.load(_ar_mp3)
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
@@ -121,7 +145,7 @@ class TTSEngine:
             on_speaking_start(text)
         except Exception:
             pass
-        subprocess.run(["pactl", "set-source-mute", "@DEFAULT_SOURCE@", "1"], capture_output=True)
+        _set_mic_mute(True)
         try:
             from core.language_detector import detect_language
             if detect_language(text) == "ar":
@@ -147,7 +171,7 @@ class TTSEngine:
         except Exception as e:
             print(f"[TTS] Speak error: {e}")
         finally:
-            subprocess.run(["pactl", "set-source-mute", "@DEFAULT_SOURCE@", "0"], capture_output=True)
+            _set_mic_mute(False)
             self.on_stop()
             try:
                 from integrations.touchdesigner_bridge import on_speaking_stop

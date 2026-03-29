@@ -7,8 +7,9 @@ from __future__ import annotations
 import asyncio, subprocess
 from tools.sandbox import sandbox, ToolResult
 
-import os
-os.environ.setdefault("DISPLAY", ":0")
+import os, sys
+if sys.platform != "win32":
+    os.environ.setdefault("DISPLAY", ":0")
 try:
     import pyautogui
     pyautogui.FAILSAFE = True
@@ -81,7 +82,8 @@ async def tool_scroll(args: dict) -> ToolResult:
 @sandbox.register(name="screenshot_gui")
 async def tool_screenshot_gui(args: dict) -> ToolResult:
     if err := _check(): return err
-    path = "/tmp/jarvis_screen.png"
+    import tempfile as _tempfile
+    path = os.path.join(_tempfile.gettempdir(), "jarvis_screen.png")
     img  = await asyncio.to_thread(pyautogui.screenshot)
     img.save(path)
     return ToolResult(True, path, "screenshot_gui")
@@ -108,11 +110,14 @@ async def tool_open_application(args: dict) -> ToolResult:
     if not name:
         return ToolResult(False, "", "open_application", "No application name provided.")
     try:
-        await asyncio.create_subprocess_exec(
-            "xdg-open", name,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        if sys.platform == "win32":
+            os.startfile(name)
+        else:
+            await asyncio.create_subprocess_exec(
+                "xdg-open", name,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
         return ToolResult(True, f"Launched: {name}", "open_application")
     except Exception:
         try:

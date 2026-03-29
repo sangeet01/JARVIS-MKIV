@@ -4,7 +4,7 @@ Local vision via LLaVA (Ollama) — fast, offline, no API key required.
 Falls back gracefully if Ollama is unavailable.
 """
 from __future__ import annotations
-import base64, os
+import base64, os, tempfile
 from pathlib import Path
 
 import httpx
@@ -43,7 +43,7 @@ async def analyze_screenshot(prompt: str | None = None) -> str:
     result = await tool_screenshot_gui({})
     if not result.success:
         return "Screenshot failed — cannot analyse screen."
-    description = await analyze_image("/tmp/jarvis_screen.png", prompt)
+    description = await analyze_image(os.path.join(tempfile.gettempdir(), "jarvis_screen.png"), prompt)
     try:
         from integrations.touchdesigner_bridge import on_vision_result
         on_vision_result(description)
@@ -57,7 +57,7 @@ async def analyze_url_image(url: str, prompt: str | None = None) -> str:
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(url)
         r.raise_for_status()
-        img_path = "/tmp/jarvis_url_image.jpg"
+        img_path = os.path.join(tempfile.gettempdir(), "jarvis_url_image.jpg")
         with open(img_path, "wb") as f:
             f.write(r.content)
     return await analyze_image(img_path, prompt)

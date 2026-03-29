@@ -146,9 +146,24 @@ class AutoGUIAgent(AgentBase):
         return await asyncio.to_thread(_ocr)
 
     async def focus_window(self, title: str) -> bool:
-        """Bring window matching title to foreground using xdotool."""
+        """Bring window matching title to foreground."""
         def _focus():
-            # Try xdotool first
+            import sys as _sys
+            if _sys.platform == "win32":
+                try:
+                    import win32gui
+                    hwnds: list = []
+                    def _cb(hwnd, _):
+                        if title.lower() in (win32gui.GetWindowText(hwnd) or "").lower():
+                            hwnds.append(hwnd)
+                    win32gui.EnumWindows(_cb, None)
+                    if hwnds:
+                        win32gui.SetForegroundWindow(hwnds[0])
+                        return True
+                except ImportError:
+                    pass
+                return False
+            # Linux: xdotool first, wmctrl fallback
             try:
                 result = subprocess.run(
                     ["xdotool", "search", "--name", title, "windowactivate", "--sync"],
@@ -157,7 +172,6 @@ class AutoGUIAgent(AgentBase):
                 return result.returncode == 0
             except FileNotFoundError:
                 pass
-            # Fallback: wmctrl
             try:
                 result = subprocess.run(
                     ["wmctrl", "-a", title],

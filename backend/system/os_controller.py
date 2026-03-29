@@ -4,7 +4,7 @@ OS control layer: file system, process management, network, system config.
 All public functions return {"success": bool, "result": str, "error": str}.
 """
 from __future__ import annotations
-import os, re, shutil, socket, subprocess, pathlib, time
+import os, platform, re, shutil, socket, subprocess, pathlib, time
 import psutil
 
 # ── Result helper ──────────────────────────────────────────────────────────────
@@ -18,10 +18,13 @@ def _pulse_env() -> dict:
     """Return an env dict with PulseAudio/PipeWire runtime paths set.
     pactl fails with 'Connection refused' when run from a subprocess that
     lacks XDG_RUNTIME_DIR (e.g. the FastAPI worker thread).
+    On Windows, os.getuid() does not exist — returns plain env copy.
     """
     env = os.environ.copy()
-    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
-    env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{os.getuid()}/pulse")
+    if platform.system() != "Windows":
+        uid = os.getuid()
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+        env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{uid}/pulse")
     return env
 
 def _fmt_size(n: int) -> str:
@@ -297,10 +300,16 @@ def monitor_bandwidth() -> dict:
 
 def disconnect_interface(interface: str) -> dict:
     try:
-        result = subprocess.run(
-            ["ip", "link", "set", interface, "down"],
-            capture_output=True, text=True,
-        )
+        if platform.system() == "Windows":
+            result = subprocess.run(
+                ["netsh", "interface", "set", "interface", interface, "disabled"],
+                capture_output=True, text=True,
+            )
+        else:
+            result = subprocess.run(
+                ["ip", "link", "set", interface, "down"],
+                capture_output=True, text=True,
+            )
         if result.returncode != 0:
             return _R(False, error=result.stderr or "Command failed")
         return _R(True, f"Interface {interface} disconnected.")
@@ -310,10 +319,16 @@ def disconnect_interface(interface: str) -> dict:
 
 def connect_interface(interface: str) -> dict:
     try:
-        result = subprocess.run(
-            ["ip", "link", "set", interface, "up"],
-            capture_output=True, text=True,
-        )
+        if platform.system() == "Windows":
+            result = subprocess.run(
+                ["netsh", "interface", "set", "interface", interface, "enabled"],
+                capture_output=True, text=True,
+            )
+        else:
+            result = subprocess.run(
+                ["ip", "link", "set", interface, "up"],
+                capture_output=True, text=True,
+            )
         if result.returncode != 0:
             return _R(False, error=result.stderr or "Command failed")
         return _R(True, f"Interface {interface} connected.")
@@ -328,6 +343,17 @@ def connect_interface(interface: str) -> dict:
 def set_volume(percent: int) -> dict:
     try:
         pct = max(0, min(100, int(percent)))
+        if platform.system() == "Windows":
+            try:
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                from comtypes import CLSCTX_ALL
+                devices = AudioUtilities.GetSpeakers()
+                interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = interface.QueryInterface(IAudioEndpointVolume)
+                volume.SetMasterVolumeLevelScalar(pct / 100.0, None)
+                return _R(True, f"Volume set to {pct}%.")
+            except Exception as e:
+                return _R(False, error=f"Windows volume control failed: {e}")
         result = subprocess.run(
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
             capture_output=True, text=True,
@@ -342,6 +368,17 @@ def set_volume(percent: int) -> dict:
 
 def get_volume() -> dict:
     try:
+        if platform.system() == "Windows":
+            try:
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                from comtypes import CLSCTX_ALL
+                devices = AudioUtilities.GetSpeakers()
+                interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = interface.QueryInterface(IAudioEndpointVolume)
+                vol = round(volume.GetMasterVolumeLevelScalar() * 100)
+                return _R(True, f"Current volume: {vol}%")
+            except Exception as e:
+                return _R(False, error=f"Windows volume read failed: {e}")
         result = subprocess.run(
             ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
             capture_output=True, text=True,
@@ -357,6 +394,13 @@ def get_volume() -> dict:
 def set_brightness(percent: int) -> dict:
     try:
         pct = max(1, min(100, int(percent)))
+        if platform.system() == "Windows":
+            try:
+                import screen_brightness_control as sbc
+                sbc.set_brightness(pct)
+                return _R(True, f"Brightness set to {pct}%.")
+            except Exception as e:
+                return _R(False, error=f"Windows brightness control failed: {e}")
         result = subprocess.run(
             ["brightnessctl", "set", f"{pct}%"],
             capture_output=True, text=True,
@@ -372,6 +416,15 @@ def set_brightness(percent: int) -> dict:
 
 def get_brightness() -> dict:
     try:
+        if platform.system() == "Windows":
+            try:
+                import screen_brightness_control as sbc
+                pct = sbc.get_brightness(display=0)
+                if isinstance(pct, list):
+                    pct = pct[0]
+                return _R(True, f"Current brightness: {pct}%")
+            except Exception as e:
+                return _R(False, error=f"Windows brightness read failed: {e}")
         cur = subprocess.run(["brightnessctl", "get"], capture_output=True, text=True)
         mx  = subprocess.run(["brightnessctl", "max"], capture_output=True, text=True)
         c, m = int(cur.stdout.strip()), int(mx.stdout.strip())
@@ -383,7 +436,10 @@ def get_brightness() -> dict:
 
 def power_sleep() -> dict:
     try:
-        subprocess.Popen(["systemctl", "suspend"])
+        if platform.system() == "Windows":
+            subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
+        else:
+            subprocess.Popen(["systemctl", "suspend"])
         return _R(True, "System suspending.")
     except Exception as e:
         return _R(False, error=str(e))
@@ -391,7 +447,10 @@ def power_sleep() -> dict:
 
 def power_reboot() -> dict:
     try:
-        subprocess.Popen(["systemctl", "reboot"])
+        if platform.system() == "Windows":
+            subprocess.Popen(["shutdown", "/r", "/t", "0"])
+        else:
+            subprocess.Popen(["systemctl", "reboot"])
         return _R(True, "Rebooting now, sir.")
     except Exception as e:
         return _R(False, error=str(e))
@@ -399,7 +458,10 @@ def power_reboot() -> dict:
 
 def power_shutdown() -> dict:
     try:
-        subprocess.Popen(["systemctl", "poweroff"])
+        if platform.system() == "Windows":
+            subprocess.Popen(["shutdown", "/s", "/t", "0"])
+        else:
+            subprocess.Popen(["systemctl", "poweroff"])
         return _R(True, "Shutting down, sir.")
     except Exception as e:
         return _R(False, error=str(e))
@@ -407,6 +469,8 @@ def power_shutdown() -> dict:
 
 def list_startup_apps() -> dict:
     try:
+        if platform.system() == "Windows":
+            return _R(False, error="Service management not supported on Windows. Use Task Scheduler or NSSM.")
         result = subprocess.run(
             ["systemctl", "list-unit-files", "--user", "--state=enabled"],
             capture_output=True, text=True,
@@ -419,6 +483,8 @@ def list_startup_apps() -> dict:
 
 def enable_startup(service: str) -> dict:
     try:
+        if platform.system() == "Windows":
+            return _R(False, error="Service management not supported on Windows. Use Task Scheduler or NSSM.")
         result = subprocess.run(
             ["systemctl", "--user", "enable", service],
             capture_output=True, text=True,
@@ -432,6 +498,8 @@ def enable_startup(service: str) -> dict:
 
 def disable_startup(service: str) -> dict:
     try:
+        if platform.system() == "Windows":
+            return _R(False, error="Service management not supported on Windows. Use Task Scheduler or NSSM.")
         result = subprocess.run(
             ["systemctl", "--user", "disable", service],
             capture_output=True, text=True,
