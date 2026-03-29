@@ -11,8 +11,8 @@ except ImportError:
 
 SAMPLE_RATE   = 24000
 PLAYBACK_RATE = 48000
-VOICE         = "bm_george"
-SPEED         = 1.25
+VOICE         = "bm_daniel"
+SPEED         = 1.2
 OUTPUT_DEVICE = None
 
 
@@ -53,14 +53,9 @@ class TTSEngine:
     def start(self):
         self._running = True
         if KOKORO_AVAILABLE:
-            print("[TTS] Loading Kokoro-82M (British, CUDA)...")
-            try:
-                self._pipeline = KPipeline(lang_code="b", device="cuda")
-                print("[TTS] Kokoro ready on CUDA.")
-            except Exception as e:
-                print(f"[TTS] CUDA failed ({e}), falling back to CPU...")
-                self._pipeline = KPipeline(lang_code="b", device="cpu")
-                print("[TTS] Kokoro ready on CPU.")
+            print("[TTS] Loading Kokoro-82M (British, CPU)...")
+            self._pipeline = KPipeline(lang_code="b", device="cpu")
+            print("[TTS] Kokoro ready on CPU.")
             print("[TTS] Running warm-up inference...")
             try:
                 _ = list(self._pipeline("hello", voice=VOICE, speed=SPEED))
@@ -132,8 +127,23 @@ class TTSEngine:
             if detect_language(text) == "ar":
                 self._speak_arabic(text)
             else:
-                for sentence in _split_sentences(text):
-                    self._play_sentence(sentence)
+                sentences = _split_sentences(text)
+                # Pre-synthesize all sentences before playing any
+                audio_chunks = []
+                for sentence in sentences:
+                    if not KOKORO_AVAILABLE or not self._pipeline:
+                        continue
+                    try:
+                        chunks = [a for _, _, a in self._pipeline(sentence, voice=VOICE, speed=SPEED) if a is not None]
+                        if chunks:
+                            audio = _resample(np.concatenate(chunks), SAMPLE_RATE, PLAYBACK_RATE)
+                            audio_chunks.append(audio)
+                    except Exception as e:
+                        print(f"[TTS] Synthesis error: {e}")
+                # Play all chunks sequentially with no gap
+                for audio in audio_chunks:
+                    sd.play(audio, samplerate=PLAYBACK_RATE, device=OUTPUT_DEVICE)
+                    sd.wait()
         except Exception as e:
             print(f"[TTS] Speak error: {e}")
         finally:
@@ -144,16 +154,3 @@ class TTSEngine:
                 on_speaking_stop()
             except Exception:
                 pass
-
-    def _play_sentence(self, sentence: str):
-        if not KOKORO_AVAILABLE or not self._pipeline:
-            print("[TTS] Kokoro pipeline not registered — cannot speak")
-            return
-        try:
-            chunks = [a for _, _, a in self._pipeline(sentence, voice=VOICE, speed=SPEED) if a is not None]
-            if chunks:
-                audio = _resample(np.concatenate(chunks), SAMPLE_RATE, PLAYBACK_RATE)
-                sd.play(audio, samplerate=PLAYBACK_RATE, device=OUTPUT_DEVICE)
-                sd.wait()
-        except Exception as e:
-            print(f"[TTS] Playback error: {e}")

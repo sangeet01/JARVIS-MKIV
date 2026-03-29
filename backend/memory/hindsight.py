@@ -122,7 +122,19 @@ class HindsightMemory:
         self.long.touch_session(session_id)
 
     def get_context(self, session_id: str) -> list[dict]:
-        return self.short.to_api_format(session_id)
+        history = self.short.to_api_format(session_id)
+        history = [
+            msg for msg in history
+            if not (
+                msg.get("role") == "assistant" and
+                any(phrase in msg.get("content", "") for phrase in ["Tony Stark", "Iron Man", "Tony's", "genius billionaire"])
+            )
+        ]
+        return history
+
+    def clear_session(self, session_id: str) -> None:
+        if session_id in self.short._sessions:
+            self.short._sessions[session_id] = []
 
     def recall(self, query: str, top_k: int = 3) -> str:
         entries = self.long.retrieve(query, top_k=top_k)

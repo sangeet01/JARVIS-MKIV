@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 class ModelConfig(BaseModel):
     groq_model:      str = "llama-3.3-70b-versatile"
-    local_model:     str = "deepseek-r1:7b"
+    local_model:     str = "llava:7b"
     groq_max_tokens: int = 512
     local_max_tokens: int = 1024
     ollama_host:     str = "http://localhost:11434"

@@ -13,6 +13,7 @@ import asyncio, threading, httpx, websockets, json, datetime, time, signal, re
 from voice.stt import STTEngine
 from voice.news import get_morning_briefing
 from voice.tts import TTSEngine
+from voice.wake_word import WakeWordDetector
 
 API_BASE   = "http://localhost:8000"
 SESSION_ID = "voice-pipeline"
@@ -39,6 +40,7 @@ class VoiceOrchestrator:
     def __init__(self):
         self._tts        = TTSEngine(on_start=self._on_speaking_start, on_stop=self._on_speaking_stop)
         self._stt        = STTEngine(on_transcript=self._on_transcript)
+        self._wake       = WakeWordDetector(on_detected=self._on_wake)
         self._hud_ws     = None
         self._loop       = asyncio.new_event_loop()
         self._busy       = False
@@ -68,11 +70,15 @@ class VoiceOrchestrator:
         # STT starts after TTS is confirmed — prevents transcription before we can respond
         self._stt.start()
 
+        # Wake word starts alongside STT — independent mic stream
+        self._wake.start()
+
         # Greeting fires only after both pipelines are live
         self._speak_greeting()
         print("[VOICE] Voice pipeline online.")
 
     def stop(self) -> None:
+        self._wake.stop()
         self._stt.stop()
         self._tts.stop()
         self._loop.stop()
@@ -110,6 +116,13 @@ class VoiceOrchestrator:
     def _resume_listening(self) -> None:
         self._busy = False
         self._send_hud("voice:listening")
+
+    def _on_wake(self) -> None:
+        if not self._busy and not self._is_speaking:
+            print("[WAKE] Hey JARVIS detected")
+            self._send_hud("voice:wake")
+            self._tts.speak("Yes, sir.")
+            self._busy = False  # keep STT open for follow-up
 
     # ── MKIII query ───────────────────────────────────────────────────────────
 

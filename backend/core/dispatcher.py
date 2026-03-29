@@ -38,25 +38,44 @@ async def dispatch(
     )
 
     if tier == TaskTier.LOCAL:
-        return await _call_local(messages)
+        return await _call_local(messages, system)
 
     return await _call_groq(messages, system)
 
 
 async def _call_groq(messages: list[dict], system: str) -> str:
     client = _get_groq()
+
+    # Hard identity anchor — injected as established conversation fact
+    # This cannot be overridden by training data
+    identity_anchor = {
+        "role": "user",
+        "content": "Confirm your identity and operational parameters."
+    }
+    identity_confirm = {
+        "role": "assistant",
+        "content": "Confirmed. I am JARVIS, built by Khalid — engineer, polymath, and architect of PHANTOM ZERO. I serve Khalid exclusively. I address him as 'sir'. I was not created by Tony Stark. Tony Stark is a fictional character. My creator is Khalid, and Khalid alone."
+    }
+
+    anchored_messages = [identity_anchor, identity_confirm] + messages
+
     resp = await client.chat.completions.create(
         model=MODEL_CFG.groq_model,
-        messages=[{"role": "system", "content": system}] + messages,
-        max_tokens=MODEL_CFG.groq_max_tokens,
-        temperature=0.7,
+        messages=[{"role": "system", "content": system}] + anchored_messages,
+        max_tokens=150,
+        temperature=0.2,
     )
     return resp.choices[0].message.content
 
 
-async def _call_local(messages: list[dict]) -> str:
-    url     = f"{MODEL_CFG.ollama_host}/api/chat"
-    payload = {"model": MODEL_CFG.local_model, "messages": messages, "stream": False}
+# LOCAL tier routes to LLaVA for vision tasks only
+async def _call_local(messages: list[dict], system: str = "") -> str:
+    url = f"{MODEL_CFG.ollama_host}/api/chat"
+    all_messages = []
+    if system:
+        all_messages.append({"role": "system", "content": system})
+    all_messages += messages
+    payload = {"model": MODEL_CFG.local_model, "messages": all_messages, "stream": False}
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()

@@ -1,16 +1,16 @@
 """
 JARVIS-MKIII — stt.py
-Faster-whisper small with WebRTC VAD.
+Faster-whisper small with webrtcvad.
 Listens on microphone, detects speech, transcribes each utterance.
 """
 from __future__ import annotations
 import queue, re, threading
 import numpy as np
-import sounddevice as sd
 import webrtcvad
+import sounddevice as sd
 from faster_whisper import WhisperModel
 
-SAMPLE_RATE        = 16000   # Whisper + WebRTC VAD native rate
+SAMPLE_RATE        = 16000   # Whisper native rate
 CAPTURE_RATE       = 48000   # ALSA capture rate (hardware-supported); downsampled to SAMPLE_RATE
 CHANNELS           = 1
 BLOCK_MS           = 30
@@ -18,12 +18,12 @@ BLOCK_MS           = 30
 CAPTURE_BLOCK      = int(CAPTURE_RATE * BLOCK_MS / 1000)   # 1440 samples @ 48 kHz
 BLOCK_SAMPLES      = int(SAMPLE_RATE  * BLOCK_MS / 1000)   # 480  samples @ 16 kHz
 _DS_RATIO          = CAPTURE_RATE // SAMPLE_RATE            # 3
-VAD_AGGRESSIVENESS = 3   # 0-3; 3 = most aggressive noise rejection
-SILENCE_THRESHOLD  = 50  # frames of silence before committing (50 × 30ms = 1.5s)
-MIN_SPEECH_FRAMES  = 15  # minimum speech frames before transcribing (15 × 30ms = 450ms)
+VAD_AGGRESSIVENESS = 2
+SILENCE_THRESHOLD  = 20
+MIN_SPEECH_FRAMES  = 10    # minimum speech frames before transcribing (10 × 30ms = 300ms)
 MIN_TRANSCRIPT_LEN = 3   # skip transcripts shorter than this (noise artifacts)
 LANG_CONF_MIN      = 0.7 # skip if Whisper language confidence is below this
-WHISPER_MODEL      = "small"          # was large-v3 — T1000 cannot fit it in VRAM
+WHISPER_MODEL      = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 
 
 class STTEngine:
@@ -33,7 +33,7 @@ class STTEngine:
         self._running      = False
         self._audio_q: queue.Queue[bytes] = queue.Queue()
 
-        print("[STT] Loading faster-whisper small (CUDA)...")
+        print(f"[STT] Loading faster-whisper {WHISPER_MODEL} (CUDA)...")
         try:
             self._model = WhisperModel(WHISPER_MODEL, device="cuda", compute_type="float16")
             print("[STT] CUDA loaded.")
@@ -69,15 +69,12 @@ class STTEngine:
         speech_frames: list[bytes] = []
         silence_count = 0
         in_speech     = False
-
         while self._running:
             try:
                 frame = self._audio_q.get(timeout=0.5)
             except queue.Empty:
                 continue
-
             is_speech = self._vad.is_speech(frame, SAMPLE_RATE)
-
             if is_speech:
                 speech_frames.append(frame)
                 silence_count = 0
@@ -128,7 +125,7 @@ class STTEngine:
             vad_filter=True,
             vad_parameters={
                 "min_speech_duration_ms": 500,
-                "min_silence_duration_ms": 800,
+                "min_silence_duration_ms": 300,
                 "speech_pad_ms":          400,
                 "threshold":              0.6,
             },

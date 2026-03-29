@@ -914,7 +914,8 @@ async def chat(req: ChatRequest):
     except Exception as _cs_err:
         print(f"[ChromaStore] Recall failed: {_cs_err}")
 
-    _base_system = req.system_prompt or ""
+    from core.personality import build_system_prompt as _build_sys
+    _base_system = req.system_prompt or _build_sys()
 
     # Emotion state — inject behavioral modifier when non-neutral
     _emotion_modifier = ""
@@ -938,6 +939,7 @@ async def chat(req: ChatRequest):
         system = "\n\n".join(filter(None, [_base_system, _emotion_modifier, recalled, _rag_context, _chroma_context]))
 
     history  = memory.get_context(session_id)
+    history  = history[-6:]  # Keep only last 6 turns maximum
 
     response_text = await dispatch(
         prompt=req.prompt,
