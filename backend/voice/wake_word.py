@@ -11,17 +11,28 @@ Runs in a background thread, fully independent of the STT pipeline.
 from __future__ import annotations
 import importlib.util
 import os
+import sys
 import threading
 import numpy as np
 import sounddevice as sd
 
 def _resolve_wake_model_path() -> str:
-    """Resolve the openwakeword models directory cross-platform."""
-    spec = importlib.util.find_spec("openwakeword")
-    if spec is None:
-        raise ImportError("openwakeword is not installed")
-    models_dir = os.path.join(os.path.dirname(spec.origin), "resources", "models")
-    return os.path.join(models_dir, "hey_jarvis_v0.1.onnx")
+    """Resolve hey_jarvis_v0.1.onnx cross-platform — checks package dir then walks venv."""
+    try:
+        spec = importlib.util.find_spec("openwakeword")
+        if spec and spec.origin:
+            pkg_dir = os.path.dirname(spec.origin)
+            model_path = os.path.join(pkg_dir, "resources", "models", "hey_jarvis_v0.1.onnx")
+            if os.path.exists(model_path):
+                return model_path
+    except Exception:
+        pass
+    # Fallback: search venv
+    for root, dirs, files in os.walk(sys.prefix):
+        for f in files:
+            if f == "hey_jarvis_v0.1.onnx":
+                return os.path.join(root, f)
+    raise FileNotFoundError("hey_jarvis_v0.1.onnx not found in venv")
 
 WAKE_MODEL_PATH = _resolve_wake_model_path()
 SAMPLE_RATE   = 16000
@@ -43,7 +54,7 @@ class WakeWordDetector:
         print("[WAKE] Loading hey_jarvis_v0.1 model...")
         try:
             from openwakeword.model import Model
-            self._model = Model(wakeword_model_paths=[WAKE_MODEL_PATH])
+            self._model = Model(wakeword_models=[WAKE_MODEL_PATH])
             print("[WAKE] Model loaded. Listening for 'Hey JARVIS'...")
         except Exception as e:
             print(f"[WAKE] Failed to load model: {e}")

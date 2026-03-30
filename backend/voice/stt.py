@@ -18,9 +18,9 @@ BLOCK_MS           = 30
 CAPTURE_BLOCK      = int(CAPTURE_RATE * BLOCK_MS / 1000)   # 1440 samples @ 48 kHz
 BLOCK_SAMPLES      = int(SAMPLE_RATE  * BLOCK_MS / 1000)   # 480  samples @ 16 kHz
 _DS_RATIO          = CAPTURE_RATE // SAMPLE_RATE            # 3
-VAD_AGGRESSIVENESS = 2
-SILENCE_THRESHOLD  = 20
-MIN_SPEECH_FRAMES  = 10    # minimum speech frames before transcribing (10 × 30ms = 300ms)
+VAD_AGGRESSIVENESS = 1
+SILENCE_THRESHOLD  = 12
+MIN_SPEECH_FRAMES  = 8     # minimum speech frames before transcribing (8 × 30ms = 240ms)
 MIN_TRANSCRIPT_LEN = 3   # skip transcripts shorter than this (noise artifacts)
 LANG_CONF_MIN      = 0.5 # skip if Whisper language confidence is below this
 WHISPER_MODEL      = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
@@ -57,7 +57,7 @@ class STTEngine:
         def callback(indata, frames, time, status):
             if self._running:
                 # Downsample from CAPTURE_RATE to SAMPLE_RATE by decimation (3:1)
-                pcm = (indata[::_DS_RATIO, 0] * 32767).astype(np.int16).tobytes()
+                pcm = (indata[::_DS_RATIO, 0] * 32767 * 1.5).clip(-32767, 32767).astype(np.int16).tobytes()
                 self._audio_q.put(pcm)
 
         with sd.InputStream(samplerate=CAPTURE_RATE, channels=CHANNELS,
