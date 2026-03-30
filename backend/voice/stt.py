@@ -4,6 +4,7 @@ Faster-whisper small with webrtcvad.
 Listens on microphone, detects speech, transcribes each utterance.
 """
 from __future__ import annotations
+import platform
 import queue, re, threading
 import numpy as np
 import webrtcvad
@@ -23,7 +24,7 @@ SILENCE_THRESHOLD  = 12
 MIN_SPEECH_FRAMES  = 8     # minimum speech frames before transcribing (8 × 30ms = 240ms)
 MIN_TRANSCRIPT_LEN = 3   # skip transcripts shorter than this (noise artifacts)
 LANG_CONF_MIN      = 0.5 # skip if Whisper language confidence is below this
-WHISPER_MODEL      = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+WHISPER_MODEL      = "Systran/faster-whisper-medium" if platform.system() == "Windows" else "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 
 
 class STTEngine:
@@ -43,16 +44,6 @@ class STTEngine:
             print("[STT] CPU fallback loaded.")
 
         self._vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
-
-        # CUDA warm-up — pre-compile kernels so first real query is fast
-        print("[STT] Running CUDA warm-up...")
-        try:
-            dummy = np.zeros(16000, dtype=np.float32)  # 1 second of silence
-            segments, _ = self._model.transcribe(dummy, language="en")
-            list(segments)  # consume generator to trigger actual inference
-            print("[STT] CUDA warm-up complete.")
-        except Exception as e:
-            print(f"[STT] Warm-up skipped: {e}")
 
     def start(self) -> None:
         self._running = True
