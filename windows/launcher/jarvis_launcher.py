@@ -233,15 +233,19 @@ def exit_app(icon=None, item=None) -> None:
         _icon.stop()
 
 
+def show_menu(icon, item):
+    pass  # placeholder
+
+
 def build_menu():
     return pystray.Menu(
-        pystray.MenuItem("Start JARVIS", start_jarvis),
-        pystray.MenuItem("Stop JARVIS", stop_jarvis),
+        pystray.MenuItem("⚡ JARVIS Status", show_menu, default=True),
+        pystray.MenuItem("▶ Start JARVIS", start_jarvis),
+        pystray.MenuItem("⏹ Stop JARVIS", stop_jarvis),
+        pystray.MenuItem("🌐 Open HUD", open_hud),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Open HUD", open_hud),
-        pystray.MenuItem("Settings", open_settings),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Exit", exit_app),
+        pystray.MenuItem("⚙ Settings", open_settings),
+        pystray.MenuItem("✕ Exit", exit_app),
     )
 
 
@@ -260,7 +264,10 @@ def main():
     if _config.get("auto_start"):
         threading.Thread(target=start_jarvis, daemon=True).start()
 
-    _icon.run()
+    _icon.run_detached()
+    # Keep main thread alive
+    while True:
+        time.sleep(1)
 
 
 if __name__ == "__main__":
