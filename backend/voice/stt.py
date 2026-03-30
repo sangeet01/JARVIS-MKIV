@@ -22,7 +22,7 @@ VAD_AGGRESSIVENESS = 2
 SILENCE_THRESHOLD  = 20
 MIN_SPEECH_FRAMES  = 10    # minimum speech frames before transcribing (10 × 30ms = 300ms)
 MIN_TRANSCRIPT_LEN = 3   # skip transcripts shorter than this (noise artifacts)
-LANG_CONF_MIN      = 0.7 # skip if Whisper language confidence is below this
+LANG_CONF_MIN      = 0.5 # skip if Whisper language confidence is below this
 WHISPER_MODEL      = "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
 
 

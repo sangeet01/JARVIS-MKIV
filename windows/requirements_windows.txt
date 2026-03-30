@@ -36,4 +36,8 @@ pyautogui>=0.9.54
 Pillow>=10.0.0
 pyperclip>=1.8.2
 anthropic>=0.40.0
+chromadb
+scipy
+openwakeword
+python-osc
 # python-xlib is intentionally omitted — Linux/X11 only

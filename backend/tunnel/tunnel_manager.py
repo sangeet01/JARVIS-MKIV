@@ -4,10 +4,15 @@ Manages a Cloudflare Quick Tunnel (no account required).
 Starts cloudflared and parses the public trycloudflare.com URL from its output.
 """
 from __future__ import annotations
-import os, re, subprocess, threading, time
+import os, platform, re, shutil, subprocess, threading, time
 
-CLOUDFLARED_PATH = "/home/k/.local/bin/cloudflared"
-URL_FILE         = "/home/k/JARVIS-MKIII/backend/data/tunnel_url.txt"
+if platform.system() == "Windows":
+    CLOUDFLARED_PATH = shutil.which("cloudflared") or r"C:\ProgramData\cloudflared\cloudflared.exe"
+else:
+    CLOUDFLARED_PATH = shutil.which("cloudflared") or "/home/k/.local/bin/cloudflared"
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+URL_FILE   = os.path.join(_REPO_ROOT, "data", "tunnel_url.txt")
 TOKEN            = os.getenv("MOBILE_ACCESS_TOKEN", "phantom-zero-2026")
 
 

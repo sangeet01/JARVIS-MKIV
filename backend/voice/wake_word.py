@@ -9,14 +9,21 @@ Runs in a background thread, fully independent of the STT pipeline.
 """
 
 from __future__ import annotations
+import importlib.util
+import os
 import threading
 import numpy as np
 import sounddevice as sd
 
-WAKE_MODEL_PATH = (
-    "/home/k/JARVIS-MKIII/venv/lib/python3.12/site-packages/"
-    "openwakeword/resources/models/hey_jarvis_v0.1.onnx"
-)
+def _resolve_wake_model_path() -> str:
+    """Resolve the openwakeword models directory cross-platform."""
+    spec = importlib.util.find_spec("openwakeword")
+    if spec is None:
+        raise ImportError("openwakeword is not installed")
+    models_dir = os.path.join(os.path.dirname(spec.origin), "resources", "models")
+    return os.path.join(models_dir, "hey_jarvis_v0.1.onnx")
+
+WAKE_MODEL_PATH = _resolve_wake_model_path()
 SAMPLE_RATE   = 16000
 CHUNK_SAMPLES = 1280          # 80 ms — required by openWakeWord
 MODEL_KEY     = "hey_jarvis_v0.1"
