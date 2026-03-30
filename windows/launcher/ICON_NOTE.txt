@@ -1,0 +1,14 @@
+JARVIS Arc Reactor Icon
+========================
+
+Replace jarvis.ico with an actual JARVIS arc reactor icon before building.
+
+Sources:
+- Create your own 256x256 PNG and convert with:
+    pip install pillow
+    python -c "from PIL import Image; img = Image.open('jarvis.png'); img.save('jarvis.ico', format='ICO', sizes=[(256,256),(64,64),(32,32),(16,16)])"
+
+- Or use any .ico file — rename it to jarvis.ico in this directory
+
+The build_exe.bat will skip the --icon flag if jarvis.ico is not found,
+producing a default-icon executable that still works correctly.

@@ -459,6 +459,19 @@ def _extract_youtube_action(prompt: str) -> str:
     return "pause"  # safe default
 
 
+def _auto_collect(prompt: str, response: str) -> None:
+    """Background task: log interaction to training dataset."""
+    try:
+        import sys, os
+        training_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'training')
+        sys.path.insert(0, os.path.abspath(training_dir))
+        from collector import log_training_pair
+        if len(response) > 20 and len(prompt) > 5:
+            log_training_pair(prompt, response)
+    except Exception:
+        pass
+
+
 async def _spawn_agent(agent_name: str, task: str) -> str:
     try:
         agent_id = await agent_dispatcher.spawn(agent_name, task)
@@ -990,6 +1003,9 @@ async def chat(req: ChatRequest):
             print(f"[PHANTOM] Keyword scan failed: {_phe}")
     import threading as _threading
     _threading.Thread(target=_phantom_keyword_scan, args=(req.prompt,), daemon=True).start()
+
+    # Auto-collect training data (fire-and-forget, never blocks)
+    _threading.Thread(target=_auto_collect, args=(req.prompt, response_text), daemon=True).start()
 
     # Log interaction for adaptive learning (fire-and-forget, never blocks)
     asyncio.create_task(_log_interaction_bg(
