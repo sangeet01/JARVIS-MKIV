@@ -16,10 +16,15 @@ class MemoryConfig(BaseModel):
     short_term_limit: int = 20
     long_term_db:     str = "memory/hindsight.db"
 
+class WakeWordConfig(BaseModel):
+    sensitivity:  float = 0.5   # detection threshold (0.0–1.0); lower = more sensitive
+    cooldown_ms:  int   = 1500  # ms to ignore re-triggers after a detection
+
 LAT  = 30.0444
 LON  = 31.2357
 CITY = "Cairo"
 
-MODEL_CFG  = ModelConfig()
-SERVER_CFG = ServerConfig()
-MEMORY_CFG = MemoryConfig()
+MODEL_CFG   = ModelConfig()
+SERVER_CFG  = ServerConfig()
+MEMORY_CFG  = MemoryConfig()
+WAKE_CFG    = WakeWordConfig()

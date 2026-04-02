@@ -28,12 +28,15 @@ from __future__ import annotations
 import asyncio, datetime, json, os, uuid, time as _time
 from collections import deque
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 _START_TIME = _time.time()   # track uptime for /diagnostic
 
@@ -129,6 +132,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="JARVIS-MKIII", version="3.3.0", lifespan=lifespan)
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"error": "rate_limited", "retry_after": 6})
 
 app.add_middleware(MobileAuthMiddleware)
 app.add_middleware(
@@ -492,7 +503,8 @@ async def _spawn_agent(agent_name: str, task: str) -> str:
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
 @app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
+@limiter.limit("10/minute")
+async def chat(req: ChatRequest, request: Request):
     session_id  = req.session_id or str(uuid.uuid4())
     memory.init_session(session_id)
     lower_prompt = req.prompt.strip().lower()

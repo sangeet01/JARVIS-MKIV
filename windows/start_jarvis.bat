@@ -4,9 +4,8 @@ cd /d %~dp0..
 set JARVIS_DIR=%CD%
 
 REM ── Vault password ──────────────────────────────────────────────────────────
-REM Change this to your vault master password, or delete this line and use
-REM the password-file method (see windows\SETUP_WINDOWS.md §3).
-set JARVIS_VAULT_PASSWORD=17112004
+REM Vault password is loaded from Windows Credential Manager at runtime.
+REM One-time setup: run windows\setup_vault_keyring.py to store your password.
 
 REM ── Paths ───────────────────────────────────────────────────────────────────
 set PYTHON=venv\Scripts\python.exe
@@ -28,7 +27,7 @@ REM ── Start backend ──────────────────�
 echo [JARVIS] Clearing port 8000 if in use...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%a /F 2>nul
 echo [JARVIS] Starting backend on http://localhost:8000 ...
-start "JARVIS Backend" cmd /k "set JARVIS_VAULT_PASSWORD=%JARVIS_VAULT_PASSWORD% && cd backend && ..\%PYTHON% -m uvicorn api.main:app --host 0.0.0.0 --port 8000"
+start "JARVIS Backend" cmd /k "cd backend && ..\%PYTHON% -m uvicorn api.main:app --host 0.0.0.0 --port 8000"
 
 REM Wait and verify backend is up before launching voice pipeline
 echo [JARVIS] Waiting for backend to start...
@@ -47,7 +46,7 @@ if errorlevel 1 (
 
 REM ── Start voice pipeline ─────────────────────────────────────────────────────
 echo [JARVIS] Starting voice pipeline...
-start "JARVIS Voice" cmd /k "cd /d %JARVIS_DIR%\backend && set PYTHONPATH=%JARVIS_DIR%\backend && set JARVIS_VAULT_PASSWORD=%JARVIS_VAULT_PASSWORD% && %JARVIS_DIR%\%PYTHON% voice\voice_orchestrator.py"
+start "JARVIS Voice" cmd /k "cd /d %JARVIS_DIR%\backend && set PYTHONPATH=%JARVIS_DIR%\backend && %JARVIS_DIR%\%PYTHON% voice\voice_orchestrator.py"
 timeout /t 5 /nobreak >nul
 
 REM ── Start HUD ────────────────────────────────────────────────────────────────

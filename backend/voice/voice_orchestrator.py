@@ -14,6 +14,7 @@ from voice.stt import STTEngine
 from voice.news import get_morning_briefing
 from voice.tts import TTSEngine
 from voice.wake_word import WakeWordDetector
+from core.dispatcher import RateLimitFiller
 
 API_BASE   = "http://localhost:8000"
 SESSION_ID = "voice-pipeline"
@@ -164,6 +165,11 @@ class VoiceOrchestrator:
                     else:
                         self._busy = False
                     return
+            except RateLimitFiller:
+                print(f"[VOICE] Groq rate limit — speaking filler and retrying in 3s")
+                self._tts.speak("Just a moment, sir. Thinking capacity is temporarily limited.")
+                await asyncio.sleep(3)
+                continue
             except Exception as e:
                 print(f"[VOICE] Query failed (attempt {attempt+1}): {e}")
                 await asyncio.sleep(2)

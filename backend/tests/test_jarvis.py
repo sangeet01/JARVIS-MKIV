@@ -1,6 +1,6 @@
 """
 JARVIS-MKIII — Test Suite
-Run with: pytest tests/ -v
+Run with: pytest backend/tests/ -v  (from repo root, with PYTHONPATH=backend)
 """
 
 import pytest
@@ -71,7 +71,8 @@ def test_long_term_store_and_retrieve():
     mem = HindsightMemory()
     mem.consolidate("sess-1", "Agent 17 is building JARVIS-MKIII", ["jarvis", "agent17", "build"])
     results = mem.long.retrieve("jarvis build")
-    assert any("JARVIS" in r.summary for r in results)
+    # retrieve() returns raw SQLite rows (tuples): (id, summary, keywords, source_session, timestamp)
+    assert any("JARVIS" in r[1] for r in results)
 
 
 def test_recall_returns_empty_when_no_match():

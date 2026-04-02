@@ -6,11 +6,16 @@ Routes requests to the correct model:
 """
 
 from __future__ import annotations
-import os, httpx
+import asyncio, os, httpx
 from core.vault import Vault
 from core.router import TaskTier
 from config.settings import MODEL_CFG
 from core.personality import build_system_prompt
+
+
+class RateLimitFiller(Exception):
+    """Raised when Groq is rate-limited after all retries — caller should speak a filler."""
+    pass
 
 _vault = Vault()
 
@@ -44,6 +49,7 @@ async def dispatch(
 
 
 async def _call_groq(messages: list[dict], system: str) -> str:
+    from groq import RateLimitError as _GroqRateLimitError
     client = _get_groq()
 
     # Hard identity anchor — injected as established conversation fact
@@ -59,13 +65,22 @@ async def _call_groq(messages: list[dict], system: str) -> str:
 
     anchored_messages = [identity_anchor, identity_confirm] + messages
 
-    resp = await client.chat.completions.create(
-        model=MODEL_CFG.groq_model,
-        messages=[{"role": "system", "content": system}] + anchored_messages,
-        max_tokens=150,
-        temperature=0.2,
-    )
-    return resp.choices[0].message.content
+    for attempt in range(3):
+        try:
+            resp = await client.chat.completions.create(
+                model=MODEL_CFG.groq_model,
+                messages=[{"role": "system", "content": system}] + anchored_messages,
+                max_tokens=150,
+                temperature=0.2,
+            )
+            return resp.choices[0].message.content
+        except _GroqRateLimitError:
+            if attempt < 2:
+                wait = 2 ** attempt  # 1s, 2s
+                print(f"[DISPATCHER] Groq 429 — retrying in {wait}s (attempt {attempt + 1}/3)")
+                await asyncio.sleep(wait)
+            else:
+                raise RateLimitFiller("Groq rate limit — all retries exhausted")
 
 
 # LOCAL tier routes to LLaVA for vision tasks only

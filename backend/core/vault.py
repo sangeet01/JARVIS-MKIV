@@ -36,11 +36,17 @@ class Vault:
         self._cache = None
         self._key   = None
         self._salt  = None
-        # Auto-unlock when env var or pass file is available (never blocks service startup)
+        # Auto-unlock when env var, pass file, or keyring secret is available (never blocks service startup)
         try:
             env_pw = os.environ.get("JARVIS_VAULT_PASSWORD", "").strip()
             pass_file = Path.home() / "JARVIS_MKIII" / ".vault_pass"
-            if env_pw or pass_file.exists():
+            has_keyring_secret = False
+            try:
+                import keyring as _kr
+                has_keyring_secret = bool(_kr.get_password("jarvis-mkiii", "vault"))
+            except Exception:
+                pass
+            if env_pw or pass_file.exists() or has_keyring_secret:
                 self._unlock()
         except Exception:
             pass
@@ -63,13 +69,24 @@ class Vault:
         #  1. Caller-supplied password argument
         #  2. JARVIS_VAULT_PASSWORD environment variable
         #  3. Password file at ~/JARVIS_MKIII/.vault_pass (chmod 600)
-        #  4. Interactive getpass (CLI only — will fail inside systemd)
+        #  4. Windows Credential Manager via keyring
+        #  5. Interactive getpass (CLI only — will fail inside a service)
         if not password:
             password = os.environ.get("JARVIS_VAULT_PASSWORD", "").strip() or None
         if not password:
             pass_file = Path.home() / "JARVIS_MKIII" / ".vault_pass"
             if pass_file.exists():
                 password = pass_file.read_text().strip() or None
+        if not password:
+            try:
+                import keyring as _kr
+                password = _kr.get_password("jarvis-mkiii", "vault") or None
+                if password:
+                    print("[VAULT] Password loaded from Windows Credential Manager.")
+                else:
+                    print("[VAULT] ERROR: No password in keyring. Run windows/setup_vault_keyring.py to store it.")
+            except Exception:
+                pass
         if not password:
             password = getpass.getpass("Vault password: ")
 

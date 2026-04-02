@@ -4,10 +4,17 @@ Local vision via LLaVA (Ollama) — fast, offline, no API key required.
 Falls back gracefully if Ollama is unavailable.
 """
 from __future__ import annotations
-import base64, os, tempfile
+import base64, logging, os, tempfile
 from pathlib import Path
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+_VISION_UNAVAILABLE = {
+    "status": "unavailable",
+    "message": "Vision offline — Ollama unreachable. Describe what you need verbally.",
+}
 
 OLLAMA_URL   = "http://localhost:11434/api/generate"
 VISION_MODEL = os.getenv("VISION_MODEL", "llava:7b")
@@ -24,17 +31,21 @@ async def analyze_image(image_path: str, prompt: str | None = None) -> str:
 
     question = prompt or "Describe what you see in detail."
 
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        r = await client.post(OLLAMA_URL, json={
-            "model":  VISION_MODEL,
-            "prompt": question,
-            "images": [image_b64],
-            "stream": False,
-            "options": {"num_gpu": 0},   # CPU inference — GPU VRAM reserved for voice pipeline
-        })
-        r.raise_for_status()
-        data = r.json()
-        return data.get("response", "No response from vision model")
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.post(OLLAMA_URL, json={
+                "model":  VISION_MODEL,
+                "prompt": question,
+                "images": [image_b64],
+                "stream": False,
+                "options": {"num_gpu": 0},   # CPU inference — GPU VRAM reserved for voice pipeline
+            })
+            r.raise_for_status()
+            data = r.json()
+            return data.get("response", "No response from vision model")
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+        logger.warning(f"[VISION] Ollama unreachable — vision disabled: {e}")
+        return _VISION_UNAVAILABLE["message"]
 
 
 async def analyze_screenshot(prompt: str | None = None) -> str:

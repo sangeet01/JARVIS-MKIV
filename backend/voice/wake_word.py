@@ -10,11 +10,14 @@ Runs in a background thread, fully independent of the STT pipeline.
 
 from __future__ import annotations
 import importlib.util
+import logging
 import os
 import sys
 import threading
 import numpy as np
 import sounddevice as sd
+
+logger = logging.getLogger(__name__)
 
 def _resolve_wake_model_path() -> str:
     """Resolve hey_jarvis_v0.1.onnx cross-platform — checks package dir then walks venv."""
@@ -38,8 +41,14 @@ WAKE_MODEL_PATH = _resolve_wake_model_path()
 SAMPLE_RATE   = 16000
 CHUNK_SAMPLES = 1280          # 80 ms — required by openWakeWord
 MODEL_KEY     = "hey_jarvis_v0.1"
-THRESHOLD     = 0.5
-COOLDOWN_SEC  = 2.0           # ignore further detections for this long after firing
+
+try:
+    from config.settings import WAKE_CFG as _WAKE_CFG
+    THRESHOLD    = _WAKE_CFG.sensitivity
+    COOLDOWN_SEC = _WAKE_CFG.cooldown_ms / 1000.0
+except Exception:
+    THRESHOLD    = 0.5
+    COOLDOWN_SEC = 1.5
 
 
 class WakeWordDetector:
@@ -51,13 +60,13 @@ class WakeWordDetector:
         self._last_fired  = 0.0
 
     def start(self) -> None:
-        print("[WAKE] Loading hey_jarvis_v0.1 model...")
+        logger.info("[WAKE] Loading hey_jarvis_v0.1 model...")
         try:
             from openwakeword.model import Model
             self._model = Model(wakeword_models=[WAKE_MODEL_PATH])
-            print("[WAKE] Model loaded. Listening for 'Hey JARVIS'...")
+            logger.info(f"[WAKE] Model loaded (threshold={THRESHOLD}, cooldown={COOLDOWN_SEC}s). Listening for 'Hey JARVIS'...")
         except Exception as e:
-            print(f"[WAKE] Failed to load model: {e}")
+            logger.error(f"[WAKE] Failed to load model: {e}")
             return
 
         self._running = True
@@ -68,7 +77,7 @@ class WakeWordDetector:
         self._running = False
         if self._thread:
             self._thread.join(timeout=3)
-        print("[WAKE] Stopped.")
+        logger.info("[WAKE] Stopped.")
 
     def _loop(self) -> None:
         try:
@@ -85,19 +94,20 @@ class WakeWordDetector:
                     try:
                         preds = self._model.predict(audio_f32)
                     except Exception as e:
-                        print(f"[WAKE] Predict error: {e}")
+                        logger.error(f"[WAKE] Predict error: {e}")
                         continue
 
                     score = preds.get(MODEL_KEY, 0.0)
-                    if score >= THRESHOLD:
-                        import time
-                        now = time.monotonic()
-                        if now - self._last_fired >= COOLDOWN_SEC:
-                            self._last_fired = now
-                            print(f"[WAKE] 'Hey JARVIS' detected (score={score:.3f})")
-                            try:
-                                self._on_detected()
-                            except Exception as e:
-                                print(f"[WAKE] Callback error: {e}")
+                    import time
+                    now = time.monotonic()
+                    fired = score >= THRESHOLD and now - self._last_fired >= COOLDOWN_SEC
+                    logger.debug(f"[WAKE] score={score:.3f} threshold={THRESHOLD} fired={fired}")
+                    if fired:
+                        self._last_fired = now
+                        logger.info(f"[WAKE] 'Hey JARVIS' detected (score={score:.3f})")
+                        try:
+                            self._on_detected()
+                        except Exception as e:
+                            logger.error(f"[WAKE] Callback error: {e}")
         except Exception as e:
-            print(f"[WAKE] Microphone error: {e}")
+            logger.error(f"[WAKE] Microphone error: {e}")
