@@ -11,8 +11,11 @@ from core.vault import Vault
 from core.router import TaskTier
 from config.settings import MODEL_CFG
 from core.personality import build_system_prompt
+import logging
 
 
+
+logger = logging.getLogger(__name__)
 class RateLimitFiller(Exception):
     """Raised when Groq is rate-limited after all retries — caller should speak a filler."""
     pass
@@ -77,7 +80,7 @@ async def _call_groq(messages: list[dict], system: str) -> str:
         except _GroqRateLimitError:
             if attempt < 2:
                 wait = 2 ** attempt  # 1s, 2s
-                print(f"[DISPATCHER] Groq 429 — retrying in {wait}s (attempt {attempt + 1}/3)")
+                logger.warning(f"[DISPATCHER] Groq 429 — retrying in {wait}s (attempt {attempt + 1}/3)")
                 await asyncio.sleep(wait)
             else:
                 raise RateLimitFiller("Groq rate limit — all retries exhausted")
@@ -91,7 +94,7 @@ async def _call_local(messages: list[dict], system: str = "") -> str:
         all_messages.append({"role": "system", "content": system})
     all_messages += messages
     payload = {"model": MODEL_CFG.local_model, "messages": all_messages, "stream": False}
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=float(MODEL_CFG.local_model_timeout)) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
         return resp.json()["message"]["content"]

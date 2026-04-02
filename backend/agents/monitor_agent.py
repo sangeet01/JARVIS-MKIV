@@ -7,6 +7,7 @@ Starts automatically with the JARVIS backend.
 from __future__ import annotations
 import asyncio, time, psutil
 from typing import TYPE_CHECKING
+import logging
 
 # Thresholds
 _CPU_THRESH    = 90.0   # %
@@ -18,6 +19,8 @@ _CHECK_INTERVAL = 60    # seconds
 
 # Known/trusted process names (won't trigger unknown-process alert)
 _TRUSTED = {
+
+logger = logging.getLogger(__name__)
     "systemd", "Xorg", "gnome-shell", "kwin_x11", "kwin_wayland",
     "pulseaudio", "pipewire", "dbus-daemon", "NetworkManager",
     "python3", "python", "uvicorn", "node", "npm", "electron",
@@ -44,7 +47,7 @@ class MonitorAgent:
         self._running = True
         loop = asyncio.get_event_loop()
         self._task = loop.create_task(self._loop(), name="monitor_agent")
-        print("[MONITOR] Background monitor started.")
+        logger.info("[MONITOR] Background monitor started.")
 
     def stop(self):
         self._running = False
@@ -61,7 +64,7 @@ class MonitorAgent:
             try:
                 await self._check_all()
             except Exception as e:
-                print(f"[MONITOR] Check error: {e}")
+                logger.error(f"[MONITOR] Check error: {e}")
             await asyncio.sleep(_CHECK_INTERVAL)
 
     async def _check_all(self):
@@ -152,7 +155,7 @@ class MonitorAgent:
             return   # already alerted, debounce
         self._alerted.add(key)
         severity = "critical" if critical else "warning"
-        print(f"[MONITOR] ALERT [{severity.upper()}]: {message}")
+        logger.info(f"[MONITOR] ALERT [{severity.upper()}]: {message}")
 
         event = {
             "type":      "monitor_alert",

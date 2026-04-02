@@ -8,7 +8,10 @@ from __future__ import annotations
 import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
+import logging
 
+
+logger = logging.getLogger(__name__)
 FEEDS = {
     "tech":     "https://feeds.feedburner.com/TheHackersNews",
     "ai":       "https://techcrunch.com/feed/",
@@ -45,7 +48,7 @@ async def fetch_feed(url: str, max_items: int = 3) -> list[str]:
 
         return headlines
     except Exception as e:
-        print(f"[NEWS] Failed to fetch {url}: {e}")
+        logger.error(f"[NEWS] Failed to fetch {url}: {e}")
         return []
 
 

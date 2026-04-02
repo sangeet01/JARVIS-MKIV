@@ -44,6 +44,18 @@ async def memory_search(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@memory_router.post("/prune")
+async def memory_prune():
+    """Delete ChromaDB entries older than RETENTION_DAYS (90). Returns count deleted."""
+    try:
+        from memory.chroma_store import get_store
+        from memory.prune import prune_old_memories, RETENTION_DAYS
+        deleted = prune_old_memories(get_store()._col)
+        return {"deleted": deleted, "retention_days": RETENTION_DAYS}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @memory_router.delete("/clear")
 async def memory_clear(confirm: bool = Query(False)):
     """

@@ -5,6 +5,7 @@ BeautifulSoup4 parses all extracted content for clean, readable text.
 """
 from __future__ import annotations
 import asyncio, pathlib, re, time
+import logging
 
 _SCREENSHOT_DIR = pathlib.Path.home() / "JARVIS_MKIII" / "screenshots"
 _R = lambda ok, result="", error="": {"success": ok, "result": result, "error": error}
@@ -12,6 +13,8 @@ _R = lambda ok, result="", error="": {"success": ok, "result": result, "error": 
 
 # ── BeautifulSoup content extractor ───────────────────────────────────────────
 
+
+logger = logging.getLogger(__name__)
 def extract_clean_content(html: str) -> dict:
     """
     Parse raw HTML with BS4.
@@ -186,7 +189,7 @@ class BrowserAgent:
                 await self._page.goto(url, wait_until="domcontentloaded", timeout=20000)
                 html = await self._page.content()
             except Exception as pw_err:
-                print(f"[BROWSER] Playwright failed for {url}: {pw_err}")
+                logger.error(f"[BROWSER] Playwright failed for {url}: {pw_err}")
 
         # Check if Playwright gave usable content
         need_selenium = False
@@ -199,7 +202,7 @@ class BrowserAgent:
 
         # --- Selenium fallback ---
         if need_selenium:
-            print(f"[BROWSER] Falling back to Selenium for {url}")
+            logger.info(f"[BROWSER] Falling back to Selenium for {url}")
             sel = await self.fetch_with_selenium(url)
             if sel["success"]:
                 html = sel["result"]

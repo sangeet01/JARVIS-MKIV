@@ -2,6 +2,8 @@
 JARVIS-MKIII — voice_orchestrator.py
 Central nerve of the voice pipeline.
 
+
+logger = logging.getLogger(__name__)
 Flow:
   Mic → STT → VoiceOrchestrator → POST /chat → TTS → Speaker
                                 ↓
@@ -15,6 +17,7 @@ from voice.news import get_morning_briefing
 from voice.tts import TTSEngine
 from voice.wake_word import WakeWordDetector
 from core.dispatcher import RateLimitFiller
+import logging
 
 API_BASE   = "http://localhost:8000"
 SESSION_ID = "voice-pipeline"
@@ -48,7 +51,7 @@ class VoiceOrchestrator:
         self._is_speaking = False   # echo guard flag
 
     def start(self) -> None:
-        print("[VOICE] Starting voice pipeline...")
+        logger.info("[VOICE] Starting voice pipeline...")
 
         # Start TTS loading in background (Kokoro CUDA init takes a few seconds)
         self._tts.start()
@@ -62,11 +65,11 @@ class VoiceOrchestrator:
         asyncio.run_coroutine_threadsafe(self._connect_hud(), self._loop)
 
         # Block until Kokoro confirms ready — no blind sleep
-        print("[VOICE] Waiting for TTS to initialize...")
+        logger.info("[VOICE] Waiting for TTS to initialize...")
         if not self._tts.wait_until_ready(timeout=60):
-            print("[VOICE] WARNING: TTS did not initialize within 60s — proceeding anyway.")
+            logger.warning("[VOICE] WARNING: TTS did not initialize within 60s — proceeding anyway.")
         else:
-            print("[VOICE] TTS confirmed ready.")
+            logger.info("[VOICE] TTS confirmed ready.")
 
         # STT starts after TTS is confirmed — prevents transcription before we can respond
         self._stt.start()
@@ -76,7 +79,7 @@ class VoiceOrchestrator:
 
         # Greeting fires only after both pipelines are live
         self._speak_greeting()
-        print("[VOICE] Voice pipeline online.")
+        logger.info("[VOICE] Voice pipeline online.")
 
     def stop(self) -> None:
         self._wake.stop()
@@ -89,10 +92,10 @@ class VoiceOrchestrator:
     def _on_transcript(self, text: str) -> None:
         # Echo guard: discard anything captured while JARVIS is speaking
         if self._is_speaking:
-            print(f"[STT] Echo discarded (speaking): {text[:60]}")
+            logger.debug(f"[STT] Echo discarded (speaking): {text[:60]}")
             return
         if any(p in text.lower() for p in SELF_PHRASES):
-            print(f"[VOICE] Ignored self-phrase: {text[:50]}")
+            logger.info(f"[VOICE] Ignored self-phrase: {text[:50]}")
             return
         if self._busy:
             return
@@ -126,7 +129,7 @@ class VoiceOrchestrator:
 
     def _on_wake(self) -> None:
         if not self._busy and not self._is_speaking:
-            print("[WAKE] Hey JARVIS detected")
+            logger.debug("[WAKE] Hey JARVIS detected")
             self._send_hud("voice:wake")
             self._tts.speak("Yes, sir.")
             self._busy = False  # keep STT open for follow-up
@@ -143,11 +146,11 @@ class VoiceOrchestrator:
                         json={"prompt": prompt, "session_id": SESSION_ID},
                     )
                     if r.status_code != 200:
-                        print(f"[VOICE] Chat returned {r.status_code} (attempt {attempt+1})")
+                        logger.info(f"[VOICE] Chat returned {r.status_code} (attempt {attempt+1})")
                         await asyncio.sleep(2)
                         continue
                     if not r.text.strip():
-                        print(f"[VOICE] Empty response (attempt {attempt+1})")
+                        logger.info(f"[VOICE] Empty response (attempt {attempt+1})")
                         await asyncio.sleep(2)
                         continue
                     data = r.json()
@@ -155,7 +158,7 @@ class VoiceOrchestrator:
                     tier = data.get("tier", "voice")
                     if text:
                         self._send_hud(f"voice:response:{text}")
-                        print(f"[VOICE] [{tier.upper()}] {text}")
+                        logger.info(f"[VOICE] [{tier.upper()}] {text}")
                         try:
                             from core.text_sanitizer import sanitize_for_tts
                             text = sanitize_for_tts(text)
@@ -166,14 +169,14 @@ class VoiceOrchestrator:
                         self._busy = False
                     return
             except RateLimitFiller:
-                print(f"[VOICE] Groq rate limit — speaking filler and retrying in 3s")
+                logger.warning(f"[VOICE] Groq rate limit — speaking filler and retrying in 3s")
                 self._tts.speak("Just a moment, sir. Thinking capacity is temporarily limited.")
                 await asyncio.sleep(3)
                 continue
             except Exception as e:
-                print(f"[VOICE] Query failed (attempt {attempt+1}): {e}")
+                logger.error(f"[VOICE] Query failed (attempt {attempt+1}): {e}")
                 await asyncio.sleep(2)
-        print("[VOICE] All retries exhausted — skipping response")
+        logger.warning("[VOICE] All retries exhausted — skipping response")
         self._busy = False
 
     # ── HUD WebSocket ─────────────────────────────────────────────────────────
@@ -194,7 +197,7 @@ class VoiceOrchestrator:
                     self._hud_ws = ws
                     delay   = 1   # reset backoff on successful connect
                     attempt = 0
-                    print("[VOICE] HUD WebSocket connected.")
+                    logger.info("[VOICE] HUD WebSocket connected.")
                     async for msg in ws:
                         # Backend requests TTS for typed HUD messages
                         if isinstance(msg, str) and msg.startswith("speak:"):
@@ -205,9 +208,9 @@ class VoiceOrchestrator:
                 self._hud_ws = None
                 attempt += 1
                 if attempt > MAX_RETRIES:
-                    print(f"[VOICE] HUD WS failed after {MAX_RETRIES} retries — giving up. Backend may not be running.")
+                    logger.error(f"[VOICE] HUD WS failed after {MAX_RETRIES} retries — giving up. Backend may not be running.")
                     return
-                print(f"[VOICE] HUD WS disconnected: {e} — retry {attempt}/{MAX_RETRIES} in {delay}s")
+                logger.warning(f"[VOICE] HUD WS disconnected: {e} — retry {attempt}/{MAX_RETRIES} in {delay}s")
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, MAX_DELAY)
 
@@ -242,7 +245,7 @@ class VoiceOrchestrator:
                 self._send_hud(f"voice:response:{spoken}")
                 self._tts.speak(spoken)
         except Exception as e:
-            print(f"[NEWS] Briefing cache read failed: {e}")
+            logger.error(f"[NEWS] Briefing cache read failed: {e}")
 
 
 if __name__ == "__main__":
@@ -250,11 +253,11 @@ if __name__ == "__main__":
     orch.start()
 
     def shutdown(sig, frame):
-        print("\n[VOICE] Shutting down...")
+        logger.info("\n[VOICE] Shutting down...")
         orch.stop()
         exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
-    print("[VOICE] Running. Press Ctrl+C to stop.")
+    logger.info("[VOICE] Running. Press Ctrl+C to stop.")
     while True:
         time.sleep(1)

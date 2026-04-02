@@ -4,6 +4,8 @@ WebSocket relay:
   Voice orchestrator → /ws/hud-voice-bridge → broadcasts to all HUD clients
   HUD clients        → /ws/{session_id}     → chat streaming + voice signals
 
+
+logger = logging.getLogger(__name__)
 FIX: Added message buffer so HUD clients that connect after the greeting
      was sent still receive it on join (late-join replay).
 """
@@ -11,6 +13,7 @@ FIX: Added message buffer so HUD clients that connect after the greeting
 from __future__ import annotations
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import logging
 
 voice_router  = APIRouter()
 _hud_clients: list[WebSocket] = []
@@ -75,7 +78,7 @@ async def voice_bridge(websocket: WebSocket):
             pass
 
     _voice_ws = websocket
-    print("[BRIDGE] Voice orchestrator connected.")
+    logger.info("[BRIDGE] Voice orchestrator connected.")
     try:
         async for message in websocket.iter_text():
             # Track TTS speaking state so proactive engine can wait its turn
@@ -103,7 +106,7 @@ async def voice_bridge(websocket: WebSocket):
     finally:
         if _voice_ws is websocket:
             _voice_ws = None
-        print("[BRIDGE] Voice orchestrator disconnected.")
+        logger.info("[BRIDGE] Voice orchestrator disconnected.")
 
 
 @voice_router.websocket("/ws/{session_id}")
@@ -117,13 +120,13 @@ async def hud_session(websocket: WebSocket, session_id: str):
     # Remove any stale client for the same session (React StrictMode reconnects)
     _hud_clients[:] = [c for c in _hud_clients if c is not websocket]
     _hud_clients.append(websocket)
-    print(f"[BRIDGE] HUD connected: {session_id}")
+    logger.info(f"[BRIDGE] HUD connected: {session_id}")
 
     # ── Replay buffered voice messages to this client immediately ─────────────
     # This ensures the greeting and any recent voice events are shown even
     # if the HUD connected after they were originally broadcast.
     if _replay_buffer:
-        print(f"[BRIDGE] Replaying {len(_replay_buffer)} buffered message(s) to {session_id}")
+        logger.info(f"[BRIDGE] Replaying {len(_replay_buffer)} buffered message(s) to {session_id}")
         for msg in _replay_buffer:
             try:
                 await websocket.send_text(msg)
@@ -157,9 +160,9 @@ async def hud_session(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "done"})
 
             except Exception as e:
-                print(f"[BRIDGE] Error: {e}")
+                logger.error(f"[BRIDGE] Error: {e}")
 
     except WebSocketDisconnect:
         if websocket in _hud_clients:
             _hud_clients.remove(websocket)
-        print(f"[BRIDGE] HUD disconnected: {session_id}")
+        logger.info(f"[BRIDGE] HUD disconnected: {session_id}")

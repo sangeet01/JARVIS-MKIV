@@ -130,6 +130,7 @@ const HUD = () => {
   const [proactiveAlerts,   setProactiveAlerts]   = useState([])
   const [activeTab,         setActiveTab]         = useState('BRIDGE')
   const [voiceState,        setVoiceState]        = useState(null)
+  const [isConnecting,      setIsConnecting]      = useState(false)
   const chatEndRef     = useRef(null)
   const wsRef          = useRef(null)
   const pendingVoiceId = useRef(null)
@@ -140,6 +141,7 @@ const HUD = () => {
     if (wsRef.current && wsRef.current.readyState < 2) wsRef.current.close()
     const ws = new WebSocket(`ws://localhost:8000/ws/${SESSION_ID}`)
     wsRef.current = ws
+    ws.onopen = () => setIsConnecting(false)
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
@@ -185,6 +187,7 @@ const HUD = () => {
     ws.onerror = () => console.warn('[JARVIS-MKIII] WebSocket error')
     ws.onclose = () => {
       if (wsRef.current === ws) {
+        setIsConnecting(true)
         wsReconnectRef.current = setTimeout(connectWS, 3000)
       }
     }
@@ -355,6 +358,27 @@ const HUD = () => {
       {/* Shutdown fade overlay */}
       {shutStep >= 6 && (
         <div style={{ position:'fixed',inset:0,zIndex:999,pointerEvents:'none',background:`rgba(0,0,0,${shutStep>=7?1:0.65})`,transition:'background 0.7s ease' }}/>
+      )}
+
+      {/* Reconnecting indicator — amber pulsing dot, top-right when WS is down */}
+      {isConnecting && (
+        <div title="Reconnecting to JARVIS..." style={{
+          position: 'fixed', top: 8, right: 46,
+          display: 'flex', alignItems: 'center', gap: 5,
+          zIndex: 201, pointerEvents: 'none',
+        }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'var(--accent-orange)',
+            boxShadow: '0 0 8px var(--accent-orange)',
+            animation: 'blink 1s ease-in-out infinite',
+          }}/>
+          <span style={{
+            fontFamily: 'var(--font-main)', fontSize: 8,
+            color: 'var(--accent-orange)', letterSpacing: 1.5,
+            whiteSpace: 'nowrap',
+          }}>RECONNECTING…</span>
+        </div>
       )}
 
       {/* Shutdown button */}

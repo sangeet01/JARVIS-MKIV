@@ -41,9 +41,8 @@ AUTHORIZED_USER_ID: int = int(os.environ.get("TELEGRAM_AUTHORIZED_USER_ID", "0")
 def _is_authorized(user_id: int) -> bool:
     if AUTHORIZED_USER_ID == 0:
         log.warning("⚠  AUTHORIZED_USER_ID not set — first contact: user_id=%d", user_id)
-        print(f"\n>>> TELEGRAM FIRST CONTACT: user_id={user_id}  <<<\n"
-              f"    Set AUTHORIZED_USER_ID = {user_id} in telegram_bot.py or\n"
-              f"    export TELEGRAM_AUTHORIZED_USER_ID={user_id}\n", flush=True)
+        log.warning(">>> TELEGRAM FIRST CONTACT: user_id=%d <<<  "
+                    "Set TELEGRAM_AUTHORIZED_USER_ID=%d in env.", user_id, user_id)
         return False
     return user_id == AUTHORIZED_USER_ID
 

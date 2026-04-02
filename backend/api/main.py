@@ -1,5 +1,4 @@
 # JARVIS-MKIII backend entry point
-
 """
 JARVIS-MKIII — api/main.py
 All backend endpoints in one place.
@@ -25,7 +24,7 @@ Endpoints:
 """
 
 from __future__ import annotations
-import asyncio, datetime, json, os, uuid, time as _time
+import asyncio, datetime, json, logging, os, uuid, time as _time
 from collections import deque
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -37,6 +36,12 @@ from typing import Optional
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+# Structured logging — must be first, before any backend module is imported
+from config.logging_config import setup_logging
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 _START_TIME = _time.time()   # track uptime for /diagnostic
 
@@ -112,12 +117,41 @@ async def lifespan(app: FastAPI):
     # Auto-run morning briefing if it hasn't run today
     from briefing.morning_briefing import auto_run_if_new_day as _briefing_auto_run
     asyncio.create_task(_briefing_auto_run())
+    # Ollama model availability check (non-blocking warning)
+    try:
+        import httpx as _httpx
+        from config.settings import MODEL_CFG as _mc
+        r = await _httpx.AsyncClient(timeout=3.0).get("http://localhost:11434/api/tags")
+        tags = [m.get("name", "") for m in r.json().get("models", [])]
+        if not any(_mc.local_model in t for t in tags):
+            logger.warning("[OLLAMA] Pinned model '%s' not found — LOCAL tier will fail", _mc.local_model)
+        else:
+            logger.info("[OLLAMA] Pinned model '%s' confirmed available.", _mc.local_model)
+    except Exception:
+        logger.warning("[OLLAMA] Could not reach Ollama — LOCAL tier unavailable.")
+    # Weekly ChromaDB pruning via APScheduler
+    _scheduler = None
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from memory.prune import prune_old_memories
+        from memory.chroma_store import get_store
+        _scheduler = AsyncIOScheduler()
+        _scheduler.add_job(
+            lambda: prune_old_memories(get_store()._col),
+            trigger="interval", weeks=1, id="chroma_prune",
+        )
+        _scheduler.start()
+        logger.info("[SCHEDULER] Weekly ChromaDB prune job registered.")
+    except Exception as _se:
+        logger.warning("[SCHEDULER] APScheduler not available — prune job skipped: %s", _se)
     yield
     # Shutdown
     monitor.stop()
     proactive_engine.stop()
     proactive_agent.stop()
     analysis_task.cancel()
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
     try:
         from system.browser_agent import browser
         await browser.close()
@@ -329,17 +363,17 @@ async def _run_os_op(op_data: dict) -> str:
 
     fn = getattr(osc, op, None)
     if fn is None:
-        print(f"[OS] Unknown op: '{op}'")
+        logger.info(f"[OS] Unknown op: '{op}'")
         return f"I don't recognise that OS operation, sir."
 
-    print(f"[OS] Executing {op}({args})")
+    logger.info(f"[OS] Executing {op}({args})")
     try:
         result = await asyncio.to_thread(fn, **args)
     except Exception as e:
-        print(f"[OS] {op} raised exception: {e}")
+        logger.error(f"[OS] {op} raised exception: {e}")
         return f"That did not go as planned, sir. {e}"
 
-    print(f"[OS] {op} → success={result['success']} result={result['result'][:80]}")
+    logger.info(f"[OS] {op} → success={result['success']} result={result['result'][:80]}")
     if result["success"]:
         r = result["result"]
         # For long results (directory listings etc.), summarise for TTS
@@ -361,15 +395,15 @@ async def _handle_os_action(action: str, text: str, session_id: str):
     """
     from system.os_interpreter import interpret as os_interpret
 
-    print(f"[OS] Interpreting [{action}]: {text[:80]}")
+    logger.info(f"[OS] Interpreting [{action}]: {text[:80]}")
     try:
         op_data = await os_interpret(text)
     except Exception as e:
-        print(f"[OS] Interpreter failed: {e}")
+        logger.error(f"[OS] Interpreter failed: {e}")
         return None, f"I could not parse that OS command, sir. {e}"
 
     op = op_data.get("op", "")
-    print(f"[OS] Resolved op: {op}  args: {op_data.get('args', {})}")
+    logger.info(f"[OS] Resolved op: {op}  args: {op_data.get('args', {})}")
 
     # Destructive? Stage for confirmation.
     if op in _OS_DESTRUCTIVE:
@@ -927,7 +961,7 @@ async def chat(req: ChatRequest, request: Request):
         if _rag_memories and "No relevant" not in _rag_memories:
             _rag_context = f"Relevant past context from long-term memory:\n{_rag_memories}"
     except Exception as _rag_err:
-        print(f"[RAG] Recall failed: {_rag_err}")
+        logger.error(f"[RAG] Recall failed: {_rag_err}")
 
     # ChromaStore — domain-aware semantic memory retrieval
     _chroma_context = ""
@@ -937,7 +971,7 @@ async def chat(req: ChatRequest, request: Request):
         if _chroma_hits:
             _chroma_context = f"MEMORY CONTEXT (past relevant exchanges):\n{_chroma_hits}\n\nUse this context naturally."
     except Exception as _cs_err:
-        print(f"[ChromaStore] Recall failed: {_cs_err}")
+        logger.error(f"[ChromaStore] Recall failed: {_cs_err}")
 
     from core.personality import build_system_prompt as _build_sys
     _base_system = req.system_prompt or _build_sys()
@@ -986,14 +1020,14 @@ async def chat(req: ChatRequest, request: Request):
             session_id=session_id,
         )
     except Exception as _rag_store_err:
-        print(f"[RAG] Store failed: {_rag_store_err}")
+        logger.error(f"[RAG] Store failed: {_rag_store_err}")
 
     # ChromaStore — domain-aware background persist (non-blocking)
     try:
         from memory.chroma_store import store_memory_bg as _store_bg
         _store_bg(req.prompt, response_text, {"session_id": session_id})
     except Exception as _cs_store_err:
-        print(f"[ChromaStore] Store dispatch failed: {_cs_store_err}")
+        logger.error(f"[ChromaStore] Store dispatch failed: {_cs_store_err}")
 
     # PHANTOM ZERO — passive keyword detection (fire-and-forget, background)
     def _phantom_keyword_scan(prompt: str) -> None:
@@ -1012,7 +1046,7 @@ async def chat(req: ChatRequest, request: Request):
             if any(k in _p for k in ("taught", "teaching session", "prepared slides", "tutored", "explained to")):
                 _ph.log_activity("programming", "teaching_session", 1, notes="auto-detected from chat")
         except Exception as _phe:
-            print(f"[PHANTOM] Keyword scan failed: {_phe}")
+            logger.error(f"[PHANTOM] Keyword scan failed: {_phe}")
     import threading as _threading
     _threading.Thread(target=_phantom_keyword_scan, args=(req.prompt,), daemon=True).start()
 

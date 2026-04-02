@@ -13,8 +13,11 @@ Code:
     key = Vault().get("GROQ_API_KEY")
 """
 
+import logging
 import os, json, base64, getpass, argparse
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.hazmat.backends import default_backend
@@ -82,9 +85,9 @@ class Vault:
                 import keyring as _kr
                 password = _kr.get_password("jarvis-mkiii", "vault") or None
                 if password:
-                    print("[VAULT] Password loaded from Windows Credential Manager.")
+                    logger.info("[VAULT] Password loaded from Windows Credential Manager.")
                 else:
-                    print("[VAULT] ERROR: No password in keyring. Run windows/setup_vault_keyring.py to store it.")
+                    logger.error("[VAULT] No password in keyring. Run windows/setup_vault_keyring.py to store it.")
             except Exception:
                 pass
         if not password:

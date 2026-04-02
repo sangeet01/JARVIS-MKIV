@@ -2,6 +2,8 @@
 JARVIS-MKIII — memory/rag_memory.py
 RAG (Retrieval-Augmented Generation) long-term episodic memory engine.
 
+
+logger = logging.getLogger(__name__)
 Uses ChromaDB for persistent vector storage and sentence-transformers
 for local CPU embedding. Stores every conversation exchange permanently
 and supports semantic recall.
@@ -10,6 +12,7 @@ from __future__ import annotations
 import json, uuid
 from datetime import datetime
 from pathlib import Path
+import logging
 
 DB_PATH    = Path(__file__).parent.parent.parent / "data" / "chromadb"
 EMBED_MODEL = "all-MiniLM-L6-v2"  # fast, 384-dim, CPU-only
@@ -40,7 +43,7 @@ class RAGMemory:
             name="facts",
             metadata={"hnsw:space": "cosine"},
         )
-        print("[RAG] Memory engine initialized.")
+        logger.info("[RAG] Memory engine initialized.")
 
     # ── Write ──────────────────────────────────────────────────────────────────
 
@@ -88,7 +91,7 @@ class RAGMemory:
                 "date":      datetime.now().strftime("%Y-%m-%d"),
             }],
         )
-        print(f"[RAG] Fact stored: {fact[:80]}")
+        logger.info(f"[RAG] Fact stored: {fact[:80]}")
 
     # ── Read ───────────────────────────────────────────────────────────────────
 

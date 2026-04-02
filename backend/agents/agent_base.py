@@ -8,8 +8,11 @@ from __future__ import annotations
 import asyncio, time, uuid
 from abc import ABC, abstractmethod
 from typing import Any
+import logging
 
 
+
+logger = logging.getLogger(__name__)
 class AgentStatus:
     IDLE     = "idle"
     RUNNING  = "running"
@@ -109,9 +112,9 @@ class AgentBase(ABC):
         try:
             from agents.agent_dispatcher import dispatcher
             await dispatcher.broadcast_event(msg_type, self.report())
-            print(f"[AGENT:{self.name}] Broadcast {msg_type} status={self.status}")
+            logger.info(f"[AGENT:{self.name}] Broadcast {msg_type} status={self.status}")
         except Exception as e:
-            print(f"[AGENT:{self.name}] Broadcast failed ({msg_type}): {e}")
+            logger.error(f"[AGENT:{self.name}] Broadcast failed ({msg_type}): {e}")
 
     # ── LLM helper ────────────────────────────────────────────────────────────
     async def _llm(self, prompt: str, system: str = "", max_tokens: int = 1024) -> str:

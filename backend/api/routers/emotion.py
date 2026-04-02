@@ -2,6 +2,8 @@
 JARVIS-MKIII — api/routers/emotion.py
 Emotion / voice state endpoints.
 
+
+logger = logging.getLogger(__name__)
   GET  /emotion/state      → current detected voice state
   POST /emotion/calibrate  → record 10s baseline from microphone
   GET  /emotion/history    → last 20 state readings
@@ -13,6 +15,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter
+import logging
 
 # Ensure project root is on sys.path so emotion.voice_state can be imported
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -52,7 +55,7 @@ async def emotion_calibrate():
 
         sr       = 16000
         duration = 10
-        print("[EMOTION] Recording 10-second calibration sample — speak normally...")
+        logger.info("[EMOTION] Recording 10-second calibration sample — speak normally...")
         data = sd.rec(int(duration * sr), samplerate=sr, channels=1, dtype="float32")
         sd.wait()
         pcm = (data * 32767).astype(np.int16)

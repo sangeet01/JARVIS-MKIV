@@ -3,6 +3,8 @@ JARVIS-MKIII — agents/agent_dispatcher.py
 Central registry for all operative agents.
 Manages spawning, status, cancellation, and HUD WebSocket broadcast.
 
+
+logger = logging.getLogger(__name__)
 Endpoints added to FastAPI app (included via agent_router):
   GET  /agents              → list all agent states
   POST /agents/spawn        → spawn a named agent
@@ -12,6 +14,7 @@ from __future__ import annotations
 import asyncio, json, time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+import logging
 
 agent_router = APIRouter()
 
@@ -119,7 +122,7 @@ dispatcher = AgentDispatcher()
 async def agent_feed_ws(websocket: WebSocket):
     await websocket.accept()
     dispatcher.register_hud_client(websocket)
-    print(f"[AGENTS] HUD AgentFeed connected ({len(dispatcher._hud_clients)} clients)")
+    logger.debug(f"[AGENTS] HUD AgentFeed connected ({len(dispatcher._hud_clients)} clients)")
 
     # Replay current agent states to new client
     for state in dispatcher.get_all():
@@ -135,7 +138,7 @@ async def agent_feed_ws(websocket: WebSocket):
         pass
     finally:
         dispatcher._hud_clients.discard(websocket)
-        print(f"[AGENTS] HUD AgentFeed disconnected ({len(dispatcher._hud_clients)} clients)")
+        logger.debug(f"[AGENTS] HUD AgentFeed disconnected ({len(dispatcher._hud_clients)} clients)")
 
 
 # ── REST endpoints ────────────────────────────────────────────────────────────

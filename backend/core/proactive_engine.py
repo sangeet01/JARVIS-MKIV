@@ -2,6 +2,8 @@
 JARVIS-MKIII — core/proactive_engine.py
 Proactive intelligence engine.
 
+
+logger = logging.getLogger(__name__)
 Monitors system state and speaks without being asked — based on time,
 mission state, system health, GitHub activity, and user idle time.
 
@@ -14,6 +16,7 @@ Delivery model:
 from __future__ import annotations
 import asyncio, datetime, time
 from typing import Any
+import logging
 
 
 class ProactiveEngine:
@@ -40,7 +43,7 @@ class ProactiveEngine:
             loop.create_task(self._github_loop(),   name="proactive_github"),
             loop.create_task(self._timed_loop(),    name="proactive_timed"),
         ]
-        print("[PROACTIVE] Engine started.")
+        logger.info("[PROACTIVE] Engine started.")
 
     def stop(self) -> None:
         self._running = False
@@ -122,7 +125,7 @@ class ProactiveEngine:
             from api.voice_bridge import broadcast_to_hud
             await broadcast_to_hud({"type": "proactive_alert", "data": alert})
         except Exception as e:
-            print(f"[PROACTIVE] HUD push failed for '{alert_id}': {e}")
+            logger.error(f"[PROACTIVE] HUD push failed for '{alert_id}': {e}")
 
         # 2. Wait 10 seconds
         await asyncio.sleep(10)
@@ -130,7 +133,7 @@ class ProactiveEngine:
         # 3. Cancel if dismissed or user interacted since alert fired
         entry = self._pending_alerts.get(alert_id, {})
         if entry.get("dismissed", False) or self.last_user_interaction > fired_at:
-            print(f"[PROACTIVE] TTS cancelled for '{alert_id}' (user active / dismissed).")
+            logger.info(f"[PROACTIVE] TTS cancelled for '{alert_id}' (user active / dismissed).")
             self._pending_alerts.pop(alert_id, None)
             return
 
@@ -142,9 +145,9 @@ class ProactiveEngine:
                     break
                 await asyncio.sleep(1)
             await request_speak(alert["message"])
-            print(f"[PROACTIVE] Spoke: '{alert_id}'")
+            logger.info(f"[PROACTIVE] Spoke: '{alert_id}'")
         except Exception as e:
-            print(f"[PROACTIVE] TTS failed for '{alert_id}': {e}")
+            logger.error(f"[PROACTIVE] TTS failed for '{alert_id}': {e}")
 
         alert["spoken"] = True
 
@@ -164,7 +167,7 @@ class ProactiveEngine:
                 await self.check_system_anomalies()
                 await self.check_idle()
             except Exception as e:
-                print(f"[PROACTIVE] Main loop error: {e}")
+                logger.error(f"[PROACTIVE] Main loop error: {e}")
             await asyncio.sleep(30)
 
     async def _calendar_loop(self) -> None:
@@ -174,7 +177,7 @@ class ProactiveEngine:
             try:
                 await self.check_calendar_events()
             except Exception as e:
-                print(f"[PROACTIVE] Calendar loop error: {e}")
+                logger.error(f"[PROACTIVE] Calendar loop error: {e}")
             await asyncio.sleep(300)
 
     async def _github_loop(self) -> None:
@@ -184,7 +187,7 @@ class ProactiveEngine:
             try:
                 await self.check_github_activity()
             except Exception as e:
-                print(f"[PROACTIVE] GitHub loop error: {e}")
+                logger.error(f"[PROACTIVE] GitHub loop error: {e}")
             await asyncio.sleep(600)
 
     async def _timed_loop(self) -> None:
@@ -197,7 +200,7 @@ class ProactiveEngine:
                 if now.hour == 23 and now.minute == 0:
                     asyncio.create_task(self.check_end_of_day())
             except Exception as e:
-                print(f"[PROACTIVE] Timed loop error: {e}")
+                logger.error(f"[PROACTIVE] Timed loop error: {e}")
             await asyncio.sleep(60)
 
     # ══ TRIGGER IMPLEMENTATIONS ═══════════════════════════════════════════════
@@ -398,7 +401,7 @@ class ProactiveEngine:
             # events whose start time falls in the 0–15 minute window.
             events = await asyncio.to_thread(get_upcoming_events, minutes_ahead=16)
         except Exception as e:
-            print(f"[PROACTIVE] Calendar fetch failed: {e}")
+            logger.error(f"[PROACTIVE] Calendar fetch failed: {e}")
             return
 
         now = datetime.datetime.now()
@@ -554,7 +557,7 @@ class ProactiveEngine:
                 pass
 
         except Exception as e:
-            print(f"[PROACTIVE] Anomaly check error: {e}")
+            logger.error(f"[PROACTIVE] Anomaly check error: {e}")
 
     # 5. GITHUB ACTIVITY ALERTS ────────────────────────────────────────────────
 

@@ -98,7 +98,8 @@ async def test_sandbox_unknown_tool():
     s = Sandbox()
     result = await s.run("nonexistent_tool", {}, auto_confirm=True)
     assert not result.success
-    assert "Unknown tool" in result.error
+    # Either blocked by whitelist or rejected as unknown — both are valid refusals
+    assert result.error, "Should have a non-empty error message"
 
 
 @pytest.mark.asyncio
@@ -130,3 +131,84 @@ def test_sandbox_tool_registration():
     async def my_tool(args): return ToolResult(True, "ok", "test_tool")
     tools = s.list_tools()
     assert any(t["name"] == "test_tool" for t in tools)
+
+
+# ── Phase 2 tests ─────────────────────────────────────────────────────────────
+
+def test_alert_deduplication():
+    """_should_fire() must suppress the same alert type within its cooldown window."""
+    from agents.proactive_agent import ProactiveAgent
+    import time
+
+    agent = ProactiveAgent()
+    # Override cooldown to a large value so second call is definitely suppressed
+    agent.ALERT_COOLDOWN = {"test_type": 9999}
+
+    assert agent._should_fire("test_type") is True,  "First call must fire"
+    assert agent._should_fire("test_type") is False, "Second call within cooldown must be suppressed"
+
+    # After clearing the last-alert time, it should fire again
+    agent._last_alert_times.pop("test_type")
+    assert agent._should_fire("test_type") is True, "After reset, must fire again"
+
+
+@pytest.mark.asyncio
+async def test_tool_sandbox_whitelist():
+    """Sandbox must block tool names not in ALLOWED_TOOLS."""
+    from tools.sandbox import Sandbox, ToolResult
+    from config.settings import ALLOWED_TOOLS
+
+    s = Sandbox()
+
+    # Register a harmless tool under an unauthorized name
+    @s.register(name="__evil_tool__", requires_confirmation=False)
+    async def evil(args): return ToolResult(True, "pwned", "__evil_tool__")
+
+    # The tool is registered but should be blocked by the whitelist
+    result = await s.run("__evil_tool__", {}, auto_confirm=True)
+    assert not result.success, "Unauthorized tool must be blocked"
+    assert "not in the allowed list" in result.error
+
+    # A whitelisted tool that is also registered should pass
+    @s.register(name="shell", requires_confirmation=False)
+    async def fake_shell(args): return ToolResult(True, "ok", "shell")
+
+    result2 = await s.run("shell", {}, auto_confirm=True)
+    assert result2.success, "Whitelisted tool must be allowed"
+
+
+def test_memory_prune():
+    """prune_old_memories() must delete entries with timestamps older than retention window."""
+    from datetime import datetime, timedelta
+    from memory.prune import prune_old_memories
+
+    # Build a minimal mock collection
+    class MockCollection:
+        def __init__(self):
+            self._deleted = []
+            self._entries = {
+                "ids": ["id_old_1", "id_old_2"],
+                "metadatas": [
+                    {"timestamp": (datetime.utcnow() - timedelta(days=100)).isoformat()},
+                    {"timestamp": (datetime.utcnow() - timedelta(days=95)).isoformat()},
+                ],
+            }
+
+        def get(self, where, include):
+            # Simulate ChromaDB $lt filter: return entries older than cutoff
+            cutoff_str = where["timestamp"]["$lt"]
+            cutoff = datetime.fromisoformat(cutoff_str)
+            ids = [
+                eid for eid, meta in zip(self._entries["ids"], self._entries["metadatas"])
+                if datetime.fromisoformat(meta["timestamp"]) < cutoff
+            ]
+            return {"ids": ids, "metadatas": []}
+
+        def delete(self, ids):
+            self._deleted.extend(ids)
+
+    col = MockCollection()
+    deleted = prune_old_memories(col, days=90)
+    assert deleted == 2, f"Expected 2 deletions, got {deleted}"
+    assert "id_old_1" in col._deleted
+    assert "id_old_2" in col._deleted

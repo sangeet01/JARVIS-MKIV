@@ -8,6 +8,9 @@ import asyncio, subprocess
 from tools.sandbox import sandbox, ToolResult
 
 import os, sys
+import logging
+
+logger = logging.getLogger(__name__)
 if sys.platform != "win32":
     os.environ.setdefault("DISPLAY", ":0")
 try:
@@ -15,7 +18,7 @@ try:
     pyautogui.FAILSAFE = True
     PYAUTOGUI_AVAILABLE = True
 except (ImportError, SystemExit, Exception) as _e:
-    print(f"[TOOLS] PyAutoGUI import failed: {_e}")
+    logger.error(f"[TOOLS] PyAutoGUI import failed: {_e}")
     PYAUTOGUI_AVAILABLE = False
 
 

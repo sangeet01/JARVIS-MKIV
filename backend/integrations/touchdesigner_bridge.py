@@ -2,6 +2,8 @@
 JARVIS-MKIII — integrations/touchdesigner_bridge.py
 OSC bridge to TouchDesigner for real-time reactive visuals.
 
+
+logger = logging.getLogger(__name__)
 TouchDesigner should be running and listening on TD_PORT (default 9000).
 All sends fail silently if TD is not running — JARVIS continues normally.
 
@@ -15,6 +17,7 @@ OSC address map:
 """
 from __future__ import annotations
 import os
+import logging
 
 TD_HOST = os.getenv("TD_HOST", "127.0.0.1")
 TD_PORT = int(os.getenv("TD_PORT", "9000"))
@@ -31,9 +34,9 @@ def _get_client():
         from pythonosc import udp_client
         _client = udp_client.SimpleUDPClient(TD_HOST, TD_PORT)
         _available = True
-        print(f"[TD] OSC client ready → {TD_HOST}:{TD_PORT}")
+        logger.info(f"[TD] OSC client ready → {TD_HOST}:{TD_PORT}")
     except Exception as e:
-        print(f"[TD] OSC client unavailable: {e}")
+        logger.warning(f"[TD] OSC client unavailable: {e}")
         _available = False
     return _client
 
@@ -46,7 +49,7 @@ def send_event(address: str, *args) -> None:
     try:
         client.send_message(address, list(args))
     except Exception as e:
-        print(f"[TD] OSC send failed ({address}): {e}")
+        logger.error(f"[TD] OSC send failed ({address}): {e}")
 
 
 # ── Standard JARVIS event hooks ───────────────────────────────────────────────

@@ -16,9 +16,11 @@ so the standard 10-second user-interaction cancel logic applies.
 """
 
 from __future__ import annotations
-import asyncio, json, time
+import asyncio, json, logging, time
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent.parent / "data" / "proactive_config.json"
 
@@ -46,8 +48,21 @@ class ProactiveAgent:
     VRAM_WARN_THRESHOLD  = 90
     MISSION_STALE_HOURS  = 24
 
+    # Minimum seconds between repeat alerts of each category
+    ALERT_COOLDOWN: dict[str, int] = {
+        "calendar":     3600,    # 1 hour
+        "github":       7200,    # 2 hours
+        "weather":      10800,   # 3 hours
+        "system_health": 1800,   # 30 minutes
+        "health":       1800,
+        "missions":     3600,    # 1 hour
+        "whatsapp":     1800,    # 30 minutes
+        "phantom":      86400,   # 1 day
+    }
+
     def __init__(self):
         self._alerts_today:      dict[str, datetime] = {}
+        self._last_alert_times:  dict[str, float]    = {}
         self._history:           list[dict]          = []
         self._silenced_until:    float               = 0.0
         self._running:           bool                = False
@@ -65,7 +80,7 @@ class ProactiveAgent:
         self._running = True
         loop = asyncio.get_event_loop()
         self._task = loop.create_task(self.run(), name="proactive_agent")
-        print("[PROACTIVE] Autonomous agent started.")
+        logger.info("[PROACTIVE] Autonomous agent started.")
 
     def stop(self) -> None:
         self._running = False
@@ -96,7 +111,7 @@ class ProactiveAgent:
                 await self._scan_all()
                 self._last_scan = datetime.now()
             except Exception as e:
-                print(f"[PROACTIVE] Scan error: {e}")
+                logger.error(f"[PROACTIVE] Scan error: {e}")
             await asyncio.sleep(self._config.get("check_interval", self.CHECK_INTERVAL))
 
     async def _scan_all(self) -> None:
@@ -147,6 +162,17 @@ class ProactiveAgent:
     def _mark_alerted_today(self, key: str) -> None:
         self._alerts_today[key] = datetime.now()
 
+    def _should_fire(self, alert_type: str) -> bool:
+        """Return True only if cooldown has elapsed since last alert of this type."""
+        cooldown = self.ALERT_COOLDOWN.get(alert_type, 3600)
+        last = self._last_alert_times.get(alert_type, 0)
+        if time.monotonic() - last < cooldown:
+            logger.debug("[PROACTIVE] %s suppressed — cooldown active (%ds remaining)",
+                         alert_type, int(cooldown - (time.monotonic() - last)))
+            return False
+        self._last_alert_times[alert_type] = time.monotonic()
+        return True
+
     # ── Alert delivery ─────────────────────────────────────────────────────────
 
     async def _interrupt(
@@ -158,7 +184,7 @@ class ProactiveAgent:
     ) -> None:
         """Fire an interruption: record in history, push to HUD, speak via TTS."""
         if time.time() < self._silenced_until:
-            print(f"[PROACTIVE] Silenced — suppressed: {message[:60]}")
+            logger.warning(f"[PROACTIVE] Silenced — suppressed: {message[:60]}")
             return
 
         try:
@@ -182,7 +208,7 @@ class ProactiveAgent:
             self._history.pop(0)
         self._alerts_fired_today += 1
 
-        print(f"[PROACTIVE] [{priority.upper()}] [{source}] {clean}")
+        logger.info(f"[PROACTIVE] [{priority.upper()}] [{source}] {clean}")
 
         try:
             from integrations.touchdesigner_bridge import on_alert
@@ -203,7 +229,7 @@ class ProactiveAgent:
                 hud_message = clean[:90],
             ))
         except Exception as e:
-            print(f"[PROACTIVE] Fire alert failed: {e}")
+            logger.error(f"[PROACTIVE] Fire alert failed: {e}")
 
         # Record in Hindsight memory
         try:
@@ -231,7 +257,7 @@ class ProactiveAgent:
         try:
             events = await asyncio.to_thread(get_upcoming_events, minutes_ahead=window_hi + 1)
         except Exception as e:
-            print(f"[PROACTIVE] Calendar fetch failed: {e}")
+            logger.error(f"[PROACTIVE] Calendar fetch failed: {e}")
             return
 
         now = datetime.now()
@@ -267,6 +293,8 @@ class ProactiveAgent:
                 f"Sir, heads up. {title}{loc_text} starts "
                 f"in {mins} minute{'s' if mins != 1 else ''}."
             )
+            if not self._should_fire("calendar"):
+                continue
             await self._interrupt(msg, priority="high", source="calendar",
                                   alert_id=key)
             self._mark_alerted_today(key)
@@ -314,6 +342,8 @@ class ProactiveAgent:
                 f"{n} commit{'s' if n != 1 else ''} pushed. "
                 f"Latest: {truncated}."
             )
+            if not self._should_fire("github"):
+                continue
             await self._interrupt(msg, priority="low", source="github",
                                   alert_id=key)
             self._mark_alerted_today(key)
@@ -329,7 +359,7 @@ class ProactiveAgent:
                 _gp().log_activity("engineering", "commit", 1,
                                    notes=f"auto: {name} — {truncated}")
             except Exception as _phe:
-                print(f"[PHANTOM] GitHub auto-log failed: {_phe}")
+                logger.error(f"[PHANTOM] GitHub auto-log failed: {_phe}")
 
     # ── Monitor: System Health ─────────────────────────────────────────────────
 
@@ -390,7 +420,7 @@ class ProactiveAgent:
                 pass
 
         except Exception as e:
-            print(f"[PROACTIVE] System health check error: {e}")
+            logger.error(f"[PROACTIVE] System health check error: {e}")
 
     # ── Monitor: Weather ───────────────────────────────────────────────────────
 
@@ -414,12 +444,14 @@ class ProactiveAgent:
                 f"Weather alert sir. {w['condition']} expected in Cairo today. "
                 f"Temperature {w['temp']} degrees."
             )
+            if not self._should_fire("weather"):
+                return
             await self._interrupt(msg, priority="medium", source="weather",
                                   alert_id=key)
             self._mark_alerted_today(key)
 
         except Exception as e:
-            print(f"[PROACTIVE] Weather check error: {e}")
+            logger.error(f"[PROACTIVE] Weather check error: {e}")
 
     # ── Monitor: Missions ──────────────────────────────────────────────────────
 
@@ -450,6 +482,8 @@ class ProactiveAgent:
                 f"Sir, mission {mission['title']} "
                 f"has had no update in {int(hours_stale)} hours."
             )
+            if not self._should_fire("missions"):
+                continue
             await self._interrupt(msg, priority="medium", source="missions",
                                   alert_id=key)
             self._mark_alerted_today(key)
@@ -479,12 +513,14 @@ class ProactiveAgent:
                 f"message{'s' if unread != 1 else ''}. "
                 f"From {names_str}."
             )
+            if not self._should_fire("whatsapp"):
+                return
             await self._interrupt(msg, priority="medium", source="whatsapp",
                                   alert_id=key)
             self._mark_alerted_today(key)
 
         except Exception as e:
-            print(f"[PROACTIVE] WhatsApp check error: {e}")
+            logger.error(f"[PROACTIVE] WhatsApp check error: {e}")
 
 
 # ── Singleton ──────────────────────────────────────────────────────────────────

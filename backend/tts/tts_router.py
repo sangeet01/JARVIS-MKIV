@@ -67,7 +67,7 @@ def speak(text: str) -> None:
     try:
         _kokoro_speak(text)
     except Exception as e:
-        print(f"[TTS] Kokoro failed: {e}")
+        logger.error(f"[TTS] Kokoro failed: {e}")
 
 
 def get_status() -> dict:

@@ -2,6 +2,8 @@
 JARVIS-MKIII — memory/chroma_store.py
 Domain-aware ChromaDB memory store.
 
+
+logger = logging.getLogger(__name__)
 Stores conversation exchanges with automatic domain tagging and supports
 filtered semantic retrieval. Single collection "jarvis_memory" with
 metadata-based domain partitioning.
@@ -13,6 +15,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import logging
 
 DB_PATH     = Path(__file__).parent.parent.parent / "data" / "chromadb"
 EMBED_MODEL = "all-MiniLM-L6-v2"
@@ -60,7 +63,7 @@ class ChromaStore:
             name=COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
-        print(f"[ChromaStore] Initialized — {self._col.count()} memories loaded.")
+        logger.info(f"[ChromaStore] Initialized — {self._col.count()} memories loaded.")
 
     # ── Write ──────────────────────────────────────────────────────────────────
 
@@ -201,7 +204,7 @@ def store_memory_bg(user_text: str, jarvis_text: str, metadata: Optional[dict] =
         try:
             get_store().store_memory(user_text, jarvis_text, metadata)
         except Exception as e:
-            print(f"[ChromaStore] Background store failed: {e}")
+            logger.error(f"[ChromaStore] Background store failed: {e}")
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()

@@ -10,7 +10,10 @@ import numpy as np
 import webrtcvad
 import sounddevice as sd
 from faster_whisper import WhisperModel
+import logging
 
+
+logger = logging.getLogger(__name__)
 if platform.system() == "Windows":
     try:
         from groq import Groq as _GroqClient
@@ -44,17 +47,17 @@ class STTEngine:
         self._audio_q: queue.Queue[bytes] = queue.Queue()
 
         if platform.system() != "Windows" or not GROQ_STT_AVAILABLE:
-            print(f"[STT] Loading faster-whisper {WHISPER_MODEL} (CUDA)...")
+            logger.info(f"[STT] Loading faster-whisper {WHISPER_MODEL} (CUDA)...")
             try:
                 self._model = WhisperModel(WHISPER_MODEL, device="cuda", compute_type="float16")
-                print("[STT] CUDA loaded.")
+                logger.info("[STT] CUDA loaded.")
             except Exception as e:
-                print(f"[STT] CUDA failed ({e}), falling back to CPU...")
+                logger.error(f"[STT] CUDA failed ({e}), falling back to CPU...")
                 self._model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
-                print("[STT] CPU fallback loaded.")
+                logger.warning("[STT] CPU fallback loaded.")
         else:
             self._model = None
-            print("[STT] Windows mode — using Groq Whisper API (no local model loaded).")
+            logger.info("[STT] Windows mode — using Groq Whisper API (no local model loaded).")
 
         self._vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
         self._speaking_guard = False
@@ -63,7 +66,7 @@ class STTEngine:
         self._running = True
         threading.Thread(target=self._capture_loop, daemon=True).start()
         threading.Thread(target=self._vad_loop,     daemon=True).start()
-        print("[STT] Listening...")
+        logger.info("[STT] Listening...")
 
     def stop(self) -> None:
         self._running = False
@@ -149,7 +152,7 @@ class STTEngine:
 
             word_count = len(text.split())
             if word_count < 2:
-                print(f"[STT] Skipped short transcript: {text}")
+                logger.debug(f"[STT] Skipped short transcript: {text}")
                 return
 
             FALSE_POSITIVES = {
@@ -157,10 +160,10 @@ class STTEngine:
                 "hmm", "uh", "um", "conferere",
             }
             if text.lower().strip().rstrip(".!?,") in FALSE_POSITIVES:
-                print(f"[STT] Filtered false positive: {text}")
+                logger.info(f"[STT] Filtered false positive: {text}")
                 return
 
-            print(f"[STT] Transcript (Groq): {text}")
+            logger.debug(f"[STT] Transcript (Groq): {text}")
             try:
                 from integrations.touchdesigner_bridge import on_listening_stop
                 on_listening_stop()
@@ -169,7 +172,7 @@ class STTEngine:
             self.on_transcript(text)
 
         except Exception as e:
-            print(f"[STT] Groq transcription failed: {e}")
+            logger.error(f"[STT] Groq transcription failed: {e}")
             # Fall back to local whisper
             self._transcribe(frames)
 
@@ -196,12 +199,12 @@ class STTEngine:
                     from emotion.voice_state import get_analyzer
                     get_analyzer().analyze_audio(_wav_path)
                 except Exception as _ee:
-                    print(f"[EMOTION] Background analysis error: {_ee}")
+                    logger.error(f"[EMOTION] Background analysis error: {_ee}")
 
             import threading as _threading
             _threading.Thread(target=_run_emotion_analysis, daemon=True).start()
         except Exception as _se:
-            print(f"[EMOTION] Save failed: {_se}")
+            logger.error(f"[EMOTION] Save failed: {_se}")
 
         segments, info = self._model.transcribe(
             audio,
@@ -223,10 +226,10 @@ class STTEngine:
         if re.fullmatch(r"[\W\d\s]+", text):
             return
         if info.language_probability < LANG_CONF_MIN:
-            print(f"[STT] Low lang confidence ({info.language_probability:.2f}) — skipped: {text[:40]}")
+            logger.info(f"[STT] Low lang confidence ({info.language_probability:.2f}) — skipped: {text[:40]}")
             return
 
-        print(f"[STT] Transcript: {text}")
+        logger.debug(f"[STT] Transcript: {text}")
         try:
             from integrations.touchdesigner_bridge import on_listening_stop
             on_listening_stop()

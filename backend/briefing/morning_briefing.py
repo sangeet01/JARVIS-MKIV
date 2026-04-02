@@ -2,6 +2,8 @@
 JARVIS-MKIII — briefing/morning_briefing.py
 Morning briefing system.
 
+
+logger = logging.getLogger(__name__)
 Aggregates weather, calendar, missions, and news into a single spoken+visual
 briefing delivered via TTS, HUD, terminal, and hindsight memory.
 
@@ -10,6 +12,7 @@ Auto-runs once per day on startup (date comparison, not time).
 from __future__ import annotations
 import asyncio, datetime, json, os
 from pathlib import Path
+import logging
 
 # ── Concurrency guard — prevents duplicate briefing runs on startup ────────────
 _briefing_lock = asyncio.Lock()
@@ -71,7 +74,7 @@ async def _fetch_weather() -> dict:
         code    = int(current["weathercode"])
         return {"temp": temp, "condition": _weathercode_label(code)}
     except Exception as e:
-        print(f"[BRIEFING] Weather fetch failed: {e}")
+        logger.error(f"[BRIEFING] Weather fetch failed: {e}")
         return {"temp": "data unavailable", "condition": ""}
 
 
@@ -84,7 +87,7 @@ async def _fetch_calendar() -> list[dict]:
         events = await asyncio.to_thread(get_today_events)
         return events or []
     except Exception as e:
-        print(f"[BRIEFING] Calendar fetch failed: {e}")
+        logger.error(f"[BRIEFING] Calendar fetch failed: {e}")
         return []
 
 
@@ -103,7 +106,7 @@ def _count_active_missions() -> int | str:
         conn.close()
         return count
     except Exception as e:
-        print(f"[BRIEFING] Mission count failed: {e}")
+        logger.error(f"[BRIEFING] Mission count failed: {e}")
         return "mission data unavailable"
 
 
@@ -131,7 +134,7 @@ async def _summarize_headline(headline: str) -> str:
     import httpx
     api_key = _get_groq_key()
     if not api_key:
-        print("[BRIEFING] No GROQ_API_KEY available — using text fallback for headline")
+        logger.warning("[BRIEFING] No GROQ_API_KEY available — using text fallback for headline")
         return _text_fallback(headline)
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -153,7 +156,7 @@ async def _summarize_headline(headline: str) -> str:
             if result:
                 return result
     except Exception as e:
-        print(f"[BRIEFING] Headline summarization failed ({type(e).__name__}: {e}) — using text fallback")
+        logger.error(f"[BRIEFING] Headline summarization failed ({type(e).__name__}: {e}) — using text fallback")
     return _text_fallback(headline)
 
 
@@ -186,7 +189,7 @@ async def _fetch_news() -> list[str]:
                 results = await ddg_raw("world news today", count=5, news=True)
                 raw = [r["title"] for r in results if r.get("title")][:3]
         except Exception as e:
-            print(f"[BRIEFING] News fetch failed: {e}")
+            logger.error(f"[BRIEFING] News fetch failed: {e}")
             return []
 
     # Summarize each headline concurrently
@@ -224,7 +227,7 @@ async def run_briefing() -> dict:
     month   = now.strftime("%B")
     day     = now.day
 
-    print(f"[BRIEFING] Running morning briefing for {now.strftime('%Y-%m-%d')}...")
+    logger.info(f"[BRIEFING] Running morning briefing for {now.strftime('%Y-%m-%d')}...")
 
     # Gather all async sources concurrently
     weather_data, events, news_headlines = await asyncio.gather(
@@ -281,7 +284,7 @@ async def run_briefing() -> dict:
         from phantom.phantom_os import get_phantom as _get_phantom
         _phantom_addendum = _get_phantom().generate_daily_brief_addendum()
     except Exception as _pe:
-        print(f"[BRIEFING] Phantom addendum failed: {_pe}")
+        logger.error(f"[BRIEFING] Phantom addendum failed: {_pe}")
 
     # ── Spoken string (sanitized — no emojis, no markdown) ───────────────────
     from core.text_sanitizer import sanitize_for_tts
@@ -308,11 +311,11 @@ async def run_briefing() -> dict:
     }
 
     # ── Terminal output ───────────────────────────────────────────────────────
-    print(f"\n{'='*62}")
-    print(f"  JARVIS MORNING BRIEFING  —  {now.strftime('%Y-%m-%d %H:%M')}")
-    print(f"{'='*62}")
-    print(spoken)
-    print(f"{'='*62}\n")
+    logger.info(f"\n{'='*62}")
+    logger.info(f"  JARVIS MORNING BRIEFING  —  {now.strftime('%Y-%m-%d %H:%M')}")
+    logger.info(f"{'='*62}")
+    logger.info(spoken)
+    logger.info(f"{'='*62}\n")
 
     # ── TTS ───────────────────────────────────────────────────────────────────
     # TTS is delivered by the voice orchestrator after it reads the cached
@@ -324,16 +327,16 @@ async def run_briefing() -> dict:
         if _vws is not None:
             await request_speak(spoken)
         else:
-            print("[BRIEFING] Voice orchestrator not connected — TTS will be picked up on boot.")
+            logger.info("[BRIEFING] Voice orchestrator not connected — TTS will be picked up on boot.")
     except Exception as e:
-        print(f"[BRIEFING] TTS delivery failed: {e}")
+        logger.error(f"[BRIEFING] TTS delivery failed: {e}")
 
     # ── HUD event ─────────────────────────────────────────────────────────────
     try:
         from api.voice_bridge import broadcast_to_hud
         await broadcast_to_hud({"type": "briefing", "payload": briefing_dict})
     except Exception as e:
-        print(f"[BRIEFING] HUD broadcast failed: {e}")
+        logger.error(f"[BRIEFING] HUD broadcast failed: {e}")
 
     # ── Hindsight memory ──────────────────────────────────────────────────────
     try:
@@ -344,7 +347,7 @@ async def run_briefing() -> dict:
             ["briefing", "daily", weekday.lower(), month.lower()],
         )
     except Exception as e:
-        print(f"[BRIEFING] Memory store failed: {e}")
+        logger.error(f"[BRIEFING] Memory store failed: {e}")
 
     # ── TouchDesigner weather event ───────────────────────────────────────────
     try:
@@ -365,16 +368,16 @@ async def run_briefing() -> dict:
             tags=["briefing", "daily", weekday.lower(), month.lower()],
         )
     except Exception as e:
-        print(f"[BRIEFING] RAG store failed: {e}")
+        logger.error(f"[BRIEFING] RAG store failed: {e}")
 
     # ── Persist last-run record ───────────────────────────────────────────────
     try:
         _DATA_DIR.mkdir(parents=True, exist_ok=True)
         _LAST_RUN.write_text(json.dumps(briefing_dict, indent=2, ensure_ascii=False))
     except Exception as e:
-        print(f"[BRIEFING] Failed to write {_LAST_RUN}: {e}")
+        logger.error(f"[BRIEFING] Failed to write {_LAST_RUN}: {e}")
 
-    print(f"[BRIEFING] Done.")
+    logger.info(f"[BRIEFING] Done.")
     return briefing_dict
 
 
@@ -410,7 +413,7 @@ async def auto_run_if_new_day() -> None:
     Lock ensures only one instance runs even when called concurrently on boot.
     """
     if _briefing_lock.locked():
-        print("[BRIEFING] Another instance is already running — skipping.")
+        logger.warning("[BRIEFING] Another instance is already running — skipping.")
         return
     async with _briefing_lock:
         today = datetime.date.today().isoformat()
@@ -418,10 +421,10 @@ async def auto_run_if_new_day() -> None:
             if _LAST_RUN.exists():
                 data = json.loads(_LAST_RUN.read_text())
                 if data.get("date") == today:
-                    print(f"[BRIEFING] Already ran today ({today}) — skipping auto briefing.")
+                    logger.warning(f"[BRIEFING] Already ran today ({today}) — skipping auto briefing.")
                     return
         except Exception:
             pass  # Corrupt file or missing → run the briefing anyway
 
-        print(f"[BRIEFING] New day ({today}) — auto-running morning briefing...")
+        logger.info(f"[BRIEFING] New day ({today}) — auto-running morning briefing...")
         await run_briefing()

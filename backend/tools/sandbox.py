@@ -5,8 +5,11 @@ Safe tool execution layer. All agent tool calls pass through here.
 
 from __future__ import annotations
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Callable, Awaitable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,9 +31,20 @@ class Sandbox:
         return decorator
 
     async def run(self, tool_name: str, args: dict, auto_confirm: bool = False) -> ToolResult:
+        # Whitelist check — reject any tool not in the allowed list
+        try:
+            from config.settings import ALLOWED_TOOLS
+            if tool_name not in ALLOWED_TOOLS:
+                logger.warning("[SANDBOX] Blocked unauthorized tool: %s", tool_name)
+                return ToolResult(False, "", tool_name,
+                                  f"Tool '{tool_name}' is not in the allowed list.")
+        except ImportError:
+            pass  # settings not available in test context — allow
+
         if tool_name not in self._tools:
             return ToolResult(False, "", tool_name, f"Unknown tool: '{tool_name}'")
         tool = self._tools[tool_name]
+        logger.info("[SANDBOX] Executing tool: %s | args: %s", tool_name, args)
         if tool["requires_confirmation"] and not auto_confirm:
             confirm = input(f"[SANDBOX] Approve '{tool_name}' with args {args}? (y/N): ").strip().lower()
             if confirm != "y":

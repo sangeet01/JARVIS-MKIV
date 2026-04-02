@@ -2,7 +2,10 @@ from __future__ import annotations
 import threading, queue, subprocess, re, os, platform, tempfile
 import numpy as np
 import sounddevice as sd
+import logging
 
+
+logger = logging.getLogger(__name__)
 try:
     from kokoro import KPipeline
     KOKORO_AVAILABLE = True
@@ -60,7 +63,7 @@ def _set_mic_mute(mute: bool) -> None:
                 volume = interface.QueryInterface(IAudioEndpointVolume)
                 volume.SetMute(1 if mute else 0, None)
         except Exception as e:
-            print(f"[TTS] Windows mic mute failed: {e}")
+            logger.error(f"[TTS] Windows mic mute failed: {e}")
     # macOS and others: skip silently
 
 
@@ -76,17 +79,17 @@ class TTSEngine:
     def start(self):
         self._running = True
         if KOKORO_AVAILABLE:
-            print("[TTS] Loading Kokoro-82M (British, CPU)...")
+            logger.info("[TTS] Loading Kokoro-82M (British, CPU)...")
             self._pipeline = KPipeline(lang_code="b", device="cpu")
-            print("[TTS] Kokoro ready on CPU.")
-            print("[TTS] Running warm-up inference...")
+            logger.info("[TTS] Kokoro ready on CPU.")
+            logger.info("[TTS] Running warm-up inference...")
             try:
                 _ = list(self._pipeline("hello", voice=VOICE, speed=SPEED))
-                print("[TTS] Warm-up complete.")
+                logger.info("[TTS] Warm-up complete.")
             except Exception as e:
-                print(f"[TTS] Warm-up failed (non-fatal): {e}")
+                logger.error(f"[TTS] Warm-up failed (non-fatal): {e}")
         else:
-            print("[TTS] WARNING: Kokoro not available.")
+            logger.warning("[TTS] WARNING: Kokoro not available.")
 
         self._ready.set()
         threading.Thread(target=self._worker, daemon=True).start()
@@ -136,7 +139,7 @@ class TTSEngine:
                 time.sleep(0.1)
             pygame.mixer.quit()
         except Exception as e:
-            print(f"[TTS] Arabic gTTS failed: {e}")
+            logger.error(f"[TTS] Arabic gTTS failed: {e}")
 
     def _stream_speak(self, text: str):
         self.on_start()
@@ -163,13 +166,13 @@ class TTSEngine:
                             audio = _resample(np.concatenate(chunks), SAMPLE_RATE, PLAYBACK_RATE)
                             audio_chunks.append(audio)
                     except Exception as e:
-                        print(f"[TTS] Synthesis error: {e}")
+                        logger.error(f"[TTS] Synthesis error: {e}")
                 # Play all chunks sequentially with no gap
                 for audio in audio_chunks:
                     sd.play(audio, samplerate=PLAYBACK_RATE, device=OUTPUT_DEVICE)
                     sd.wait()
         except Exception as e:
-            print(f"[TTS] Speak error: {e}")
+            logger.error(f"[TTS] Speak error: {e}")
         finally:
             _set_mic_mute(False)
             self.on_stop()

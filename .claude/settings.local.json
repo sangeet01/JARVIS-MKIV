@@ -200,7 +200,8 @@
       "Bash(/c/Users/w100/JARVIS-MKIII/venv/Scripts/python.exe -m pytest /c/Users/w100/JARVIS-MKIII/backend.old/tests/test_jarvis.py -v --tb=short)",
       "Bash(PYTHONPATH=/c/Users/w100/JARVIS-MKIII/backend JARVIS_VAULT_PASSWORD=17112004 /c/Users/w100/JARVIS-MKIII/venv/Scripts/python.exe -m pytest backend.old/tests/test_jarvis.py -v --tb=short)",
       "Bash(PYTHONPATH=backend JARVIS_VAULT_PASSWORD=17112004 venv/Scripts/python -m pytest backend/tests/test_jarvis.py -v)",
-      "Bash(PYTHONPATH=backend JARVIS_VAULT_PASSWORD=17112004 venv/Scripts/python -m pytest \".claude/worktrees/charming-wright/backend/tests/test_jarvis.py\" -v)"
+      "Bash(PYTHONPATH=backend JARVIS_VAULT_PASSWORD=17112004 venv/Scripts/python -m pytest \".claude/worktrees/charming-wright/backend/tests/test_jarvis.py\" -v)",
+      "Bash(PYTHONPATH=\".claude/worktrees/charming-wright/backend\" JARVIS_VAULT_PASSWORD=17112004 venv/Scripts/python -m pytest \".claude/worktrees/charming-wright/backend/tests/test_jarvis.py\" -v)"
     ]
   }
 }

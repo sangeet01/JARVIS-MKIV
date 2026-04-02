@@ -2,6 +2,8 @@
 JARVIS-MKIII — system/os_interpreter.py
 Maps natural-language OS instructions to specific os_controller operations.
 
+
+logger = logging.getLogger(__name__)
 Strategy (fastest-first):
   1. Regex quick-parse — handles the most common commands instantly, no LLM cost.
   2. Groq LLM fallback — only for ambiguous / complex instructions.
@@ -10,6 +12,7 @@ Returns {"op": str, "args": dict} or raises ValueError.
 """
 from __future__ import annotations
 import json, re
+import logging
 
 
 # ── Valid op names (must match os_controller exactly) ─────────────────────────
@@ -48,7 +51,7 @@ def _quick_parse(text: str) -> dict | None:
         if base in ('home', 'my home', 'home directory', 'my home directory'):
             base = '~'
         path = f"{base}/{name}"
-        print(f"[OS_INTERP] regex → create_directory({path})")
+        logger.info(f"[OS_INTERP] regex → create_directory({path})")
         return {"op": "create_directory", "args": {"path": path}}
 
     # ── create file ───────────────────────────────────────────────────────────
@@ -64,7 +67,7 @@ def _quick_parse(text: str) -> dict | None:
         if base in ('home', 'my home', 'home directory', 'my home directory'):
             base = '~'
         path = f"{base}/{name}"
-        print(f"[OS_INTERP] regex → create_file({path})")
+        logger.info(f"[OS_INTERP] regex → create_file({path})")
         return {"op": "create_file", "args": {"path": path, "content": ""}}
 
     # ── process: list (must come before list_directory to avoid false match) ───
@@ -72,7 +75,7 @@ def _quick_parse(text: str) -> dict | None:
        re.search(r'\bwhat\s+processes\b', lo) or \
        re.search(r'\bprocesses?\s+(?:are\s+)?running\b', lo) or \
        re.search(r'\btask\s+manager\b', lo):
-        print("[OS_INTERP] regex → list_processes()")
+        logger.info("[OS_INTERP] regex → list_processes()")
         return {"op": "list_processes", "args": {}}
 
     # ── list directory ────────────────────────────────────────────────────────
@@ -85,21 +88,21 @@ def _quick_parse(text: str) -> dict | None:
         path = m.group(1)
         if path in ('home', 'my home', 'home directory'):
             path = '~'
-        print(f"[OS_INTERP] regex → list_directory({path})")
+        logger.info(f"[OS_INTERP] regex → list_directory({path})")
         return {"op": "list_directory", "args": {"path": path}}
 
     # ── read file ─────────────────────────────────────────────────────────────
     m = re.search(r'\b(?:read|show|cat|open)\s+(?:the\s+)?(?:file\s+)?([~/\w.\-]+)', lo)
     if m:
         path = m.group(1)
-        print(f"[OS_INTERP] regex → read_file({path})")
+        logger.info(f"[OS_INTERP] regex → read_file({path})")
         return {"op": "read_file", "args": {"path": path}}
 
     # ── delete ────────────────────────────────────────────────────────────────
     m = re.search(r'\b(?:delete|remove|rm)\s+(?:the\s+)?(?:file\s+|folder\s+|dir\s+)?([~/\w.\-]+)', lo)
     if m:
         path = m.group(1)
-        print(f"[OS_INTERP] regex → delete({path})")
+        logger.info(f"[OS_INTERP] regex → delete({path})")
         return {"op": "delete", "args": {"path": path}}
 
     # ── search files ──────────────────────────────────────────────────────────
@@ -107,20 +110,20 @@ def _quick_parse(text: str) -> dict | None:
                   r'(?:\s+in\s+(.+?))?$', lo)
     if m:
         query, root = m.group(1), m.group(2) or '~'
-        print(f"[OS_INTERP] regex → search_files({query}, {root})")
+        logger.info(f"[OS_INTERP] regex → search_files({query}, {root})")
         return {"op": "search_files", "args": {"query": query, "root": root}}
 
     # ── process: kill ─────────────────────────────────────────────────────────
     m = re.search(r'\b(?:kill|terminate|stop)\s+(?:process\s+|pid\s+)?["\']?(\S+?)["\']?\s*(?:process)?$', lo)
     if m:
         target = m.group(1)
-        print(f"[OS_INTERP] regex → kill_process({target})")
+        logger.info(f"[OS_INTERP] regex → kill_process({target})")
         return {"op": "kill_process", "args": {"name_or_pid": target}}
 
     # ── network status ────────────────────────────────────────────────────────
     if re.search(r'\bnetwork\s+(?:status|info|interfaces?|ips?)\b', lo) or \
        re.search(r'\bmy\s+ip\b', lo) or re.search(r'\bip\s+address\b', lo):
-        print("[OS_INTERP] regex → get_network_status()")
+        logger.info("[OS_INTERP] regex → get_network_status()")
         return {"op": "get_network_status", "args": {}}
 
     if re.search(r'\bactive\s+connections?\b', lo) or re.search(r'\bopen\s+connections?\b', lo):
@@ -135,7 +138,7 @@ def _quick_parse(text: str) -> dict | None:
     # ── volume ────────────────────────────────────────────────────────────────
     m = re.search(r'\b(?:set\s+)?volume\s+(?:to\s+)?(\d+)', lo)
     if m:
-        print(f"[OS_INTERP] regex → set_volume({m.group(1)})")
+        logger.info(f"[OS_INTERP] regex → set_volume({m.group(1)})")
         return {"op": "set_volume", "args": {"percent": int(m.group(1))}}
 
     if re.search(r'\b(?:what.s|what\s+is|get|check)\s+(?:the\s+)?volume\b', lo):
@@ -146,13 +149,13 @@ def _quick_parse(text: str) -> dict | None:
     if m:
         # Default bump ±15
         pct = 15 if m.group(1) == 'up' else -15
-        print(f"[OS_INTERP] regex → set_volume(relative {pct:+d}) → fallback to LLM for actual value")
+        logger.warning(f"[OS_INTERP] regex → set_volume(relative {pct:+d}) → fallback to LLM for actual value")
         # Fall through to LLM for this one — needs current level
 
     # ── brightness ────────────────────────────────────────────────────────────
     m = re.search(r'\b(?:set\s+)?brightness\s+(?:to\s+)?(\d+)', lo)
     if m:
-        print(f"[OS_INTERP] regex → set_brightness({m.group(1)})")
+        logger.info(f"[OS_INTERP] regex → set_brightness({m.group(1)})")
         return {"op": "set_brightness", "args": {"percent": int(m.group(1))}}
 
     if re.search(r'\b(?:what.s|what\s+is|get|check)\s+(?:the\s+)?brightness\b', lo):
@@ -160,15 +163,15 @@ def _quick_parse(text: str) -> dict | None:
 
     # ── power ─────────────────────────────────────────────────────────────────
     if re.search(r'\b(?:shut\s+down|shutdown|power\s+off|power\s+down)\b', lo):
-        print("[OS_INTERP] regex → power_shutdown()")
+        logger.info("[OS_INTERP] regex → power_shutdown()")
         return {"op": "power_shutdown", "args": {}}
 
     if re.search(r'\breboot\b|\brestart\s+(?:the\s+)?(?:computer|system|pc|machine)\b', lo):
-        print("[OS_INTERP] regex → power_reboot()")
+        logger.info("[OS_INTERP] regex → power_reboot()")
         return {"op": "power_reboot", "args": {}}
 
     if re.search(r'\bsleep\s+mode\b|\bsuspend\b', lo):
-        print("[OS_INTERP] regex → power_sleep()")
+        logger.info("[OS_INTERP] regex → power_sleep()")
         return {"op": "power_sleep", "args": {}}
 
     # ── startup apps ─────────────────────────────────────────────────────────
@@ -206,7 +209,7 @@ async def _llm_parse(text: str) -> dict:
     from core.vault import Vault
     from config.settings import MODEL_CFG
 
-    print(f"[OS_INTERP] LLM fallback for: {text[:80]}")
+    logger.warning(f"[OS_INTERP] LLM fallback for: {text[:80]}")
     client = AsyncGroq(api_key=Vault().get("GROQ_API_KEY"))
     resp = await client.chat.completions.create(
         model=MODEL_CFG.groq_model,
@@ -226,7 +229,7 @@ async def _llm_parse(text: str) -> dict:
     args = data.get("args", {}) or {}
     if op not in _VALID_OPS:
         raise ValueError(f"LLM returned unknown op '{op}'")
-    print(f"[OS_INTERP] LLM → {op}({args})")
+    logger.info(f"[OS_INTERP] LLM → {op}({args})")
     return {"op": op, "args": args}
 
 
