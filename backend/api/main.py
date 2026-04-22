@@ -72,6 +72,7 @@ from api.routers.td import td_router
 from api.routers.memory import memory_router
 from api.routers.phantom import phantom_router
 from api.routers.emotion import emotion_router
+from api.routers.reasoner import router as reasoner_router
 from tunnel.tunnel_manager import tunnel as _tunnel
 from core.mobile_auth import MobileAuthMiddleware
 from vision.vision_engine import analyze_screenshot as _llava_screenshot
@@ -207,6 +208,7 @@ app.include_router(td_router)        # /td/*
 app.include_router(memory_router)    # /memory/*
 app.include_router(phantom_router)   # /phantom/*
 app.include_router(emotion_router)   # /emotion/*
+app.include_router(reasoner_router, prefix="/reasoner", tags=["reasoner"])
 
 # ── Mobile PWA endpoints ───────────────────────────────────────────────────────
 @app.get("/mobile", include_in_schema=False)

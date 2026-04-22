@@ -1,0 +1,25 @@
+[Unit]
+Description=JARVIS-MKIV Goal Reasoner — Autonomous Agent Loop
+After=network.target jarvis-backend.service
+Requires=jarvis-backend.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/JARVIS-MKIV
+ExecStart=%h/JARVIS-MKIV/venv/bin/python backend/agents/goal_reasoner.py
+Restart=on-failure
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=%h/JARVIS-MKIV/.env
+
+# Limits — be a good citizen
+CPUQuota=15%
+MemoryMax=256M
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jarvis-reasoner
+
+[Install]
+WantedBy=default.target

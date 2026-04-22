@@ -89,6 +89,13 @@ SERVICES: list[dict] = [
         "unit":        "ollama.service",
         "systemd":     "system",
     },
+    {
+        "name":        "jarvis-reasoner",
+        "type":        "http",
+        "url":         "http://localhost:8000/reasoner/status",
+        "unit":        "jarvis-reasoner.service",
+        "systemd":     "user",
+    },
 ]
 
 # ── Logging ────────────────────────────────────────────────────────────────────
