@@ -37,6 +37,14 @@ from typing import Any, Optional
 
 import aiohttp
 
+# MKIV additions — add after existing imports
+from .ollama_fallback import call_ollama, ollama_available
+from .reasoner_memory import write_decision_memory, build_learning_context
+from .goal_stack import GoalStack
+
+# Initialize goal stack once at module level
+_goal_stack = GoalStack()
+
 # ── Logging ────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -92,6 +100,8 @@ class Context:
     system_alerts: list[dict]              = field(default_factory=list)
     hour_of_day: int                        = field(default_factory=lambda: datetime.now().hour)
     last_action_minutes_ago: Optional[int]  = None
+    goal_stack_summary: str = ""    # persistent gap tracking
+    learning_context:   str = ""    # recent past decisions for LLM
 
 @dataclass
 class ReasonerOutput:
@@ -142,6 +152,16 @@ async def assemble_context(session: aiohttp.ClientSession) -> Context:
     alerts_raw = await safe_get(f"{BACKEND_URL}/internal/alerts", [])
     if isinstance(alerts_raw, list):
         ctx.system_alerts = alerts_raw[:10]
+
+    # Goal stack context (persistent gaps, target tracking)
+    ctx.goal_stack_summary = _goal_stack.build_prompt_context()
+    
+    # Update goal stack with fresh phantom scores
+    if ctx.phantom_scores:
+        _goal_stack.update_from_scores(ctx.phantom_scores)
+
+    # Learning context — recent Reasoner decisions from memory
+    ctx.learning_context = await build_learning_context(session)
 
     log.info(
         "Context assembled — emotion=%s phantom_priority=%s scores=%s",
@@ -224,10 +244,14 @@ PHANTOM ZERO SCORES (today):
 PRIORITY RECOMMENDATION:
 {context.phantom_priority or "none"}
 
+{getattr(context, "goal_stack_summary", "")}
+
+{getattr(context, "learning_context", "")}
+
 RECENT MEMORIES (last 5):
 {chr(10).join(f"- {m}" for m in context.recent_memories) or "none"}
 
-SYSTEM ALERTS (last 10):
+SYSTEM ALERTS:
 {json.dumps(context.system_alerts[:3], indent=2) if context.system_alerts else "none"}
 
 Decide now. One action or none. JSON only.
@@ -530,8 +554,19 @@ async def main() -> None:
                 context = await assemble_context(session)
                 context.last_action_minutes_ago = minutes_since_last_action()
 
-                # 2. REASON
+                # 2. REASON — Groq first, Ollama fallback
                 output = await call_groq(context, session)
+
+                if output is None:
+                    log.warning("Groq unavailable — attempting Ollama fallback")
+                    if await ollama_available(session):
+                        output = await call_ollama(context, session)
+                        if output:
+                            log.info("Ollama fallback succeeded.")
+                        else:
+                            log.error("Ollama fallback also failed. Skipping cycle.")
+                    else:
+                        log.error("Ollama not available. Skipping cycle.")
 
                 executed = False
                 if output:
@@ -543,10 +578,18 @@ async def main() -> None:
                         executed = await execute_action(output, session)
                         if executed and output.decision in (Decision.ACT_SILENT, Decision.ACT_NOTIFY):
                             record_action_taken()
+                            # Update goal stack with what action was taken
+                            _goal_stack.record_reasoner_action(
+                                output.action_type.value,
+                                output.action_args,
+                            )
                     else:
                         log.info("Cycle %d: no action taken (DISCARD)", cycle)
 
-                # 5. AUDIT
+                    # 5. MEMORY WRITE-BACK (always, even if discarded)
+                    await write_decision_memory(session, output, executed, context)
+
+                # 6. AUDIT
                 audit_cycle(context, output, executed)
 
             except Exception as e:
