@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 
 memory_router = APIRouter(prefix="/memory", tags=["memory"])
 
@@ -57,6 +57,27 @@ async def memory_prune():
         return {"deleted": deleted, "retention_days": RETENTION_DAYS}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class StoreRequest(BaseModel):
+    content:  str
+    metadata: dict[str, Any] = {}
+
+@memory_router.post("/store")
+async def store_memory(req: StoreRequest) -> dict[str, Any]:
+    """
+    Store a memory entry into ChromaDB.
+    Called by the Goal Reasoner after every cycle to persist decisions.
+    """
+    try:
+        from memory.chroma_store import get_store
+        memory_id = get_store().store(
+            content=req.content,
+            metadata=req.metadata,
+        )
+        return {"status": "stored", "id": str(memory_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Memory store failed: {e}")
 
 
 class _SummarizeRequest(BaseModel):

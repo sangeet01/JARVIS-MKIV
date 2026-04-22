@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import MissionBoard from '../MissionBoard'
+import ReasonerFeed from '../components/ReasonerFeed'
 
 const T = {
   panel: { background:'rgba(0,7,22,0.88)', border:'1px solid rgba(0,212,255,0.18)', borderRadius:3, backdropFilter:'blur(6px)', boxShadow:'0 0 22px rgba(0,80,180,0.08)' },
@@ -68,8 +69,14 @@ export default function MissionBoardTab() {
 
       {/* PHANTOM ZERO — mission board */}
       {activeSection === 'phantom' && (
-        <div style={{ flex:1, overflow:'hidden' }}>
+        <div style={{ flex:1, overflow:'hidden', display: 'flex', flexDirection: 'column' }}>
           <MissionBoard/>
+          <div style={{ marginTop: 24, flex: 1, overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ color: '#444', fontSize: 10, letterSpacing: 2, marginBottom: 8 }}>
+              AUTONOMOUS DECISIONS
+            </div>
+            <ReasonerFeed backendUrl="http://localhost:8000" />
+          </div>
         </div>
       )}
 
