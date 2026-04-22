@@ -1,15 +1,15 @@
 <div align="center">
 
 ```
-   ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗    ███╗   ███╗██╗  ██╗██╗██╗██╗
-   ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝    ████╗ ████║██║ ██╔╝██║██║██║
-   ██║███████║██████╔╝██║   ██║██║███████╗    ██╔████╔██║█████╔╝ ██║██║██║
-██ ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║    ██║╚██╔╝██║██╔═██╗ ██║╚═╝╚═╝
-╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║    ██║ ╚═╝ ██║██║  ██╗██║██╗██╗
- ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝    ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝╚═╝╚═╝
+   ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗    ███╗   ███╗██╗  ██╗██╗██╗   ██╗
+   ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝    ████╗ ████║██║ ██╔╝██║██║   ██║
+   ██║███████║██████╔╝██║   ██║██║███████╗    ██╔████╔██║█████╔╝ ██║██║   ██║
+██ ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║    ██║╚██╔╝██║██╔═██╗ ██║╚██╗ ██╔╝
+╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║    ██║ ╚═╝ ██║██║  ██╗██║ ╚████╔╝ 
+ ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝    ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝  
 ```
 
-**Just A Rather Very Intelligent System — Mark III**
+**Just A Rather Very Intelligent System — Mark IV**
 
 *Personal AI Operating System built by AGENT17-tech under the PHANTOM ZERO framework*
 
@@ -30,9 +30,9 @@
 
 ## What This Is
 
-JARVIS-MKIII is a fully local, voice-first AI operating system running on bare metal Ubuntu. It is not a wrapper around a cloud chatbot. It is a persistent, multi-layered intelligence platform that remembers every conversation, monitors and heals its own infrastructure, tracks your performance across five operational domains, reads your emotional state from your voice, and presents everything through a cinematic Electron HUD.
+JARVIS-MKIV is a fully local, voice-first AI operating system running on bare metal Ubuntu. It is not just a reactive assistant; it is a proactive autonomous agent. It independently pursues goals, reasons about your PHANTOM ZERO performance in the background, and acts without needing a human trigger. It remembers every conversation, monitors and heals its own infrastructure, tracks your performance across five operational domains, reads your emotional state, and presents everything through a cinematic Electron HUD.
 
-Built from scratch across March 2026. Rebuilt twice. Every component battle-tested.
+Built from scratch across March 2026. Upgraded to MKIV Autonomous Agency in April 2026. Every component battle-tested.
 
 ---
 
@@ -43,6 +43,7 @@ Built from scratch across March 2026. Rebuilt twice. Every component battle-test
 │                        ELECTRON HUD (React 19)                      │
 │  BRIDGE │ INTEL │ STRATEGY │ MISSIONS │ LIFE OS │ COMMS             │
 │  Globe  │ News  │ Projects │ Phantom  │ Habits  │ Calendar          │
+│  Reasoning Feed (Live autonomous thought stream)                     │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ WebSocket + REST
 ┌──────────────────────────▼──────────────────────────────────────────┐
@@ -68,23 +69,22 @@ Built from scratch across March 2026. Rebuilt twice. Every component battle-test
 └──────────────────────────────────────────────────────────────────── ┘
                            │
 ┌──────────────────────────▼──────────────────────────────────────────┐
-│                     INFRASTRUCTURE LAYER                            │
+│                     AUTONOMOUS NERVOUS SYSTEM                       │
 │                                                                     │
-│  ┌─────────────────┐    ┌──────────────────────────────────────┐   │
-│  │  Self-Healing   │    │           EXTERNAL SERVICES          │   │
-│  │  Watchdog       │    │                                      │   │
-│  │  watchdog.py    │    │  Cloudflare Tunnel  → Public URL     │   │
-│  │  5 services     │    │  GitHub API         → Repo monitor   │   │
-│  │  3 restarts/hr  │    │  Google Calendar    → Schedule sync  │   │
-│  │  CRITICAL alert │    │  OpenWeatherMap     → Cairo weather  │   │
-│  └─────────────────┘    │  WhatsApp (Baileys) → Mobile comms   │   │
-│                         └──────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                    PHANTOM ZERO OS                           │   │
-│  │  5 Domains: Engineering │ Programming │ Combat               │   │
-│  │             Strategy    │ Neuro-Performance                  │   │
-│  │  Daily scoring, weekly trend, priority recommendation        │   │
-│  └──────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────────┐    ┌──────────────────────────────────────┐  │
+│  │  Goal Reasoner   │    │           WATCHDOG SENTINEL          │  │
+│  │  (SENSE-ACT)     │    │                                      │  │
+│  │  10min Cycles    │    │  Monitors 6 services                 │  │
+│  │  Ollama Fallback │    │  Self-Healing / Restart              │  │
+│  │  Guardrail Gated │    │  Critical Failure Alerts             │  │
+│  └──────────────────┘    └──────────────────────────────────────┘  │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                    PHANTOM ZERO OS                           │  │
+│  │  5 Domains: Engineering │ Programming │ Combat               │  │
+│  │             Strategy    │ Neuro-Performance                  │  │
+│  │  Goal Stack Tracking, Learning Loops, Priority Recommendations│  │
+│  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,6 +144,18 @@ Built from scratch across March 2026. Rebuilt twice. Every component battle-test
 | Async analysis | ✅ Operational | 11ms overhead, fully non-blocking |
 | Calibration | ✅ Operational | `POST /emotion/calibrate`, baseline.json |
 | HUD indicator | ✅ Operational | Colored dot in BRIDGE chat panel |
+
+### Autonomous Agency (MKIV Upgrade)
+
+| Feature | Status | Details |
+|---|---|---|
+| Goal Reasoner Loop | ✅ Operational | SENSE → REASON → GUARDRAILS → ACT cycle every 10m |
+| Goal Stack Persistence | ✅ Operational | Persistent `goals.json` tracks long-horizon progress |
+| Memory Learning Loop | ✅ Operational | Reasoner writes to ChromaDB, feeds back into next cycle |
+| Resilience (Ollama Fallback) | ✅ Operational | Auto-switches to local DeepSeek-R1 if Groq is down |
+| Decision Audit Trail | ✅ Operational | Full JSON audit per cycle in `data/reasoner_audit/` |
+| Guardrail Overrides | ✅ Operational | Rapid-fire/Fatigue/Confidence safety gates |
+| HUD Reasoning Feed | ✅ Operational | Live thought stream in MISSIONS tab |
 
 ### HUD (Electron + React)
 
@@ -300,7 +312,7 @@ systemctl --user start jarvis-watchdog
 
 ```bash
 # All backend services (if using systemd)
-systemctl --user start jarvis-backend jarvis-voice jarvis-proactive jarvis-watchdog
+systemctl --user start jarvis-backend jarvis-voice jarvis-reasoner jarvis-watchdog
 
 # Launch HUD
 cd hud && npm run start
@@ -318,9 +330,10 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 source venv/bin/activate
 python voice/voice_orchestrator.py
 
-# Terminal 3 — Proactive agent
+# Terminal 3 — Goal Reasoner (Autonomous Agent)
 source venv/bin/activate
-python agents/proactive_agent.py
+cd backend
+python agents/goal_reasoner.py
 
 # Terminal 4 — Watchdog
 source venv/bin/activate
@@ -334,10 +347,10 @@ cd hud && npm run start
 
 ```bash
 echo 'alias jarvis-url="cat ~/JARVIS-MKIII/.cloudflare-url"' >> ~/.bashrc
-echo 'alias jarvis-start="systemctl --user start jarvis-backend jarvis-voice jarvis-proactive jarvis-watchdog && cd ~/JARVIS-MKIII/hud && npm run start"' >> ~/.bashrc
-echo 'alias jarvis-stop="systemctl --user stop jarvis-backend jarvis-voice jarvis-proactive jarvis-watchdog"' >> ~/.bashrc
-echo 'alias jarvis-status="systemctl --user status jarvis-backend jarvis-voice jarvis-proactive jarvis-watchdog"' >> ~/.bashrc
-echo 'alias jarvis-logs="journalctl --user -u jarvis-backend -f"' >> ~/.bashrc
+echo 'alias jarvis-start="systemctl --user start jarvis-backend jarvis-voice jarvis-reasoner jarvis-watchdog && cd ~/JARVIS-MKIII/hud && npm run start"' >> ~/.bashrc
+echo 'alias jarvis-stop="systemctl --user stop jarvis-backend jarvis-voice jarvis-reasoner jarvis-watchdog"' >> ~/.bashrc
+echo 'alias jarvis-status="systemctl --user status jarvis-backend jarvis-voice jarvis-reasoner jarvis-watchdog"' >> ~/.bashrc
+echo 'alias jarvis-logs="journalctl --user -u jarvis-reasoner -f"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -360,6 +373,7 @@ source ~/.bashrc
 |---|---|---|
 | `GET` | `/memory/stats` | Total memories, domain breakdown |
 | `GET` | `/memory/search?q=&n=` | Semantic search over memory |
+| `POST` | `/memory/store` | Add a memory entry (content + metadata) |
 | `DELETE` | `/memory/clear?confirm=true` | Wipe all memories |
 
 ### PHANTOM ZERO
@@ -379,6 +393,14 @@ source ~/.bashrc
 | `GET` | `/emotion/state` | Current detected voice state |
 | `GET` | `/emotion/history` | Last 20 state readings |
 | `POST` | `/emotion/calibrate` | Record 10s baseline |
+
+### Goal Reasoner (MKIV Autonomous Agency)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/reasoner/status` | Current cycle status and health |
+| `GET` | `/reasoner/history` | Recent decision log (confidence, act, reason) |
+| `GET` | `/reasoner/audit/{file}` | Read raw JSON audit log |
 
 ### Infrastructure
 
@@ -422,7 +444,7 @@ The watchdog runs as a separate systemd service and manages the entire JARVIS pr
 Services monitored:
   jarvis-backend    → HTTP check :8000/health
   jarvis-voice      → Process match: voice_orchestrator
-  jarvis-proactive  → Process match: proactive_agent
+  jarvis-reasoner   → Process match: goal_reasoner
   jarvis-whatsapp   → Process match: whatsapp
   ollama            → HTTP check :11434
 
